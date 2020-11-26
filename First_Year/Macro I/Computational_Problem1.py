@@ -6,13 +6,16 @@ from value_function_iteration import dynamicProgramingModule
 
 
 # Define Grid:
-y = np.linspace(0.01,15,500) #state space
+
+k_max = (1/0.1)**(1/(1-0.3))
+y = np.linspace(0.01,k_max,500) #state space
 V_0 = [0 for k in y] #Initial guess forall states
 V_old = np.copy(V_0)
 V_new = np.copy(V_0)
 policyFunction = np.zeros(V_old.shape)
 
 ################################################################################
+
 
 
 #a) Value Function iteration:
@@ -30,7 +33,7 @@ fig, ax2 = plt.subplots()
 ax2.plot(y , V_new, color=plt.cm.jet(count/500), linewidth=2.5)
 ax2.set_ylabel('value', fontsize=12)
 ax2.set_xlabel('Capital $k$', fontsize=12)
-ax2.set_title('Value function iterations')
+ax2.set_title('Value function')
 
 
 # Plot Policy Rule, Final iteration
@@ -123,3 +126,9 @@ ax4.set_ylabel('Capital $k$', fontsize=12)
 ax4.set_xlabel('Time', fontsize=12)
 ax4.set_title('Transition to Steady State')
 plt.show()
+
+
+
+
+# bb = .99
+# (bb**2/(1-bb**2)**(1/2) + 2*(1-bb**2)**(1/2) - 1)/bb**2
