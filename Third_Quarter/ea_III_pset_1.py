@@ -1,5 +1,5 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 def generateData(sigma, rho, N):
 
@@ -92,3 +92,36 @@ print("ATE Estimated:",ATE_estimated3,"\nATE Analytical:", ATE_analytical3)
 print("ATT Estimated:",ATT_estimated3,"\nATT Analytical:", ATT_analytical3)
 print("ATU Estimated:",ATU_estimated3,"\nATU Analytical:", ATU_analytical3)
 print("Beta Estimated:",beta_estimated3,"\nBeta Analytical:", beta_analytical3)
+
+
+# Variation in Sigma:
+
+rho = .5
+sigma_list = np.linspace(1,3)
+ATE_estimated_list = []
+ATT_estimated_list = []
+ATU_estimated_list = []
+beta_estimated_list = []
+
+for ssigma in sigma_list:
+
+    U0, U1, Y, D = generateData(ssigma, rho, N)
+    ATE_estimated, _ = averageTreatmentEffect(sigma, rho, N, U1, U0, D)
+    ATE_estimated_list.append(ATE_estimated)
+
+    ATT_estimated, _ = averageTreatmentOnTreated(sigma, rho, N, U1, U0, D)
+    ATT_estimated_list.append(ATT_estimated)
+
+    ATU_estimated, _ = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, D)
+    ATU_estimated_list.append(ATU_estimated)
+
+    beta_estimated, _ = beta_OLS(sigma, rho, N, U1, U0, D)
+    beta_estimated_list.append(beta_estimated)
+
+
+
+plt.plot(sigma_list,ATT_estimated_list)
+plt.savefig("ATT_sigma_test.png")
+
+plt.plot(sigma_list,ATU_estimated_list)
+plt.savefig("ATU_sigma_test.png")
