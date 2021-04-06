@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.random import MT19937
+from numpy.random import RandomState, SeedSequence
+rs = RandomState(MT19937(SeedSequence(123456789)))
 
 def generateData(sigma, rho, N):
 
@@ -12,14 +15,14 @@ def generateData(sigma, rho, N):
 
     return U0, U1, Y, D
 
-def averageTreatmentEffect(sigma, rho, N, U1, U0, D):
+def averageTreatmentEffect(sigma, rho, N, U1, U0, Y, D):
 
     ATE_estimated = np.mean(U1- U0)
     ATE_analytical = 0
 
     return ATE_estimated, ATE_analytical
 
-def averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y):
+def averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y, D):
 
     ATT_estimated = -np.mean(U0[D == 1] - U1[D == 1])
     ATT_analytical = np.sqrt(2/np.pi)*np.sqrt(sigma**2 + 1 - 2*rho*sigma)
@@ -27,14 +30,14 @@ def averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y):
     return ATT_estimated, ATT_analytical
 
 
-def averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y):
+def averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y, D):
 
     ATU_estimated = np.mean(U1[D == 0] - U0[D == 0])
     ATU_analytical = -np.sqrt(2/np.pi)*np.sqrt(sigma**2 + 1 - 2*rho*sigma)
 
     return ATU_estimated, ATU_analytical
 
-def beta_OLS(sigma, rho, N, U1, U0, Y):
+def beta_OLS(sigma, rho, N, U1, U0, Y, D):
 
     beta_estimated = np.mean(Y[D == 1]) - np.mean(Y[D == 0])
     beta_analytical = np.sqrt(2/np.pi)*(sigma**2 - 1)/np.sqrt(sigma**2 -2*rho*sigma +1)
@@ -48,10 +51,10 @@ rho = .5
 N = 10000
 
 U0, U1, Y, D = generateData(sigma, rho, N)
-ATE_estimated1, ATE_analytical1 = averageTreatmentEffect(sigma, rho, N, U1, U0, D)
-ATT_estimated1, ATT_analytical1 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, D)
-ATU_estimated1, ATU_analytical1 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, D)
-beta_estimated1, beta_analytical1 = beta_OLS(sigma, rho, N, U1, U0, D)
+ATE_estimated1, ATE_analytical1 = averageTreatmentEffect(sigma, rho, N, U1, U0, Y, D)
+ATT_estimated1, ATT_analytical1 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y, D)
+ATU_estimated1, ATU_analytical1 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y, D)
+beta_estimated1, beta_analytical1 = beta_OLS(sigma, rho, N, U1, U0, Y, D)
 
 print("\nModel 1: Sigma 2 and rho 0.5")
 print("ATE Estimated:",ATE_estimated1,"\nATE Analytical:", ATE_analytical1)
@@ -65,10 +68,10 @@ sigma = 2
 rho = 0
 
 U0, U1, Y, D = generateData(sigma, rho, N)
-ATE_estimated2, ATE_analytical2 = averageTreatmentEffect(sigma, rho, N, U1, U0, D)
-ATT_estimated2, ATT_analytical2 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, D)
-ATU_estimated2, ATU_analytical2 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, D)
-beta_estimated2, beta_analytical2 = beta_OLS(sigma, rho, N, U1, U0, D)
+ATE_estimated2, ATE_analytical2 = averageTreatmentEffect(sigma, rho, N, U1, U0, Y, D)
+ATT_estimated2, ATT_analytical2 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y, D)
+ATU_estimated2, ATU_analytical2 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y, D)
+beta_estimated2, beta_analytical2 = beta_OLS(sigma, rho, N, U1, U0, Y, D)
 
 print("\nModel 2: Sigma 2 and rho 0")
 print("ATE Estimated:",ATE_estimated2,"\nATE Analytical:", ATE_analytical2)
@@ -82,10 +85,10 @@ sigma = 2
 rho = -.5
 
 U0, U1, Y, D = generateData(sigma, rho, N)
-ATE_estimated3, ATE_analytical3 = averageTreatmentEffect(sigma, rho, N, U1, U0, D)
-ATT_estimated3, ATT_analytical3 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, D)
-ATU_estimated3, ATU_analytical3 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, D)
-beta_estimated3, beta_analytical3 = beta_OLS(sigma, rho, N, U1, U0, D)
+ATE_estimated3, ATE_analytical3 = averageTreatmentEffect(sigma, rho, N, U1, U0, Y, D)
+ATT_estimated3, ATT_analytical3 = averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y, D)
+ATU_estimated3, ATU_analytical3 = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y, D)
+beta_estimated3, beta_analytical3 = beta_OLS(sigma, rho, N, U1, U0, Y, D)
 
 print("\nModel 3: Sigma 2 and rho -0.5")
 print("ATE Estimated:",ATE_estimated3,"\nATE Analytical:", ATE_analytical3)
@@ -106,16 +109,16 @@ beta_estimated_list = []
 for ssigma in sigma_list:
 
     U0, U1, Y, D = generateData(ssigma, rho, N)
-    ATE_estimated, _ = averageTreatmentEffect(sigma, rho, N, U1, U0, D)
+    ATE_estimated, _ = averageTreatmentEffect(sigma, rho, N, U1, U0, Y, D)
     ATE_estimated_list.append(ATE_estimated)
 
-    ATT_estimated, _ = averageTreatmentOnTreated(sigma, rho, N, U1, U0, D)
+    ATT_estimated, _ = averageTreatmentOnTreated(sigma, rho, N, U1, U0, Y, D)
     ATT_estimated_list.append(ATT_estimated)
 
-    ATU_estimated, _ = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, D)
+    ATU_estimated, _ = averageTreatmentOnUntreated(sigma, rho, N, U1, U0, Y, D)
     ATU_estimated_list.append(ATU_estimated)
 
-    beta_estimated, _ = beta_OLS(sigma, rho, N, U1, U0, D)
+    beta_estimated, _ = beta_OLS(sigma, rho, N, U1, U0, Y, D)
     beta_estimated_list.append(beta_estimated)
 
 

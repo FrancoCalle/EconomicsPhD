@@ -52,5 +52,5 @@ beta_hat, sigma_hat, se = olsEstimation(Y,X)
 # Question 3b:
 beta_hat_list = parametric_bootstrap(X, sigma, beta_true, S, N)
 plt.hist(beta_hat_list[:,0], bins = 60)
-plt.show()
 plt.savefig("q3_p1_Beta_2.png")
+plt.show()
