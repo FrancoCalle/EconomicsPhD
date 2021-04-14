@@ -100,7 +100,7 @@ print("Beta Estimated:",beta_estimated3,"\nBeta Analytical:", beta_analytical3)
 # Variation in Sigma:
 
 rho = .5
-sigma_list = np.linspace(1,3)
+sigma_list = np.linspace(0,3)
 ATE_estimated_list = []
 ATT_estimated_list = []
 ATU_estimated_list = []

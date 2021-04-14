@@ -63,10 +63,14 @@ for XX,YY in zip(X_sample_list,Y_sample_list):
 beta_hat_list = np.concatenate(beta_hat_list,0)
 
 plt.hist(beta_hat_list[:,0], bins = 60)
-plt.show()
 plt.savefig("q3_p2_Beta_1.png")
+plt.show()
 
 
 plt.hist(beta_hat_list[:,1], bins = 60)
-plt.show()
 plt.savefig("q3_p2_Beta_2.png")
+plt.show()
+
+
+beta_hat_list.mean(0)
+beta_hat_list.std(0)

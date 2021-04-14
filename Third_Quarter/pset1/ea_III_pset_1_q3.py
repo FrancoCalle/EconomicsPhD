@@ -49,8 +49,14 @@ X = generateCovariates(N)
 U, Y = generateData(sigma,beta_true,N, X)
 beta_hat, sigma_hat, se = olsEstimation(Y,X)
 
+se
 # Question 3b:
 beta_hat_list = parametric_bootstrap(X, sigma, beta_true, S, N)
 plt.hist(beta_hat_list[:,0], bins = 60)
 plt.savefig("q3_p1_Beta_2.png")
 plt.show()
+
+
+beta_hat_list.mean(0)
+
+beta_hat_list.std(0)
