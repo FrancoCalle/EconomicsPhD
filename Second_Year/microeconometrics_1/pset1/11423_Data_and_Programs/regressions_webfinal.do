@@ -3,7 +3,7 @@ set mem 500m
 set matsize 500 
 
 
-global root = "C:\Users\cdippel\Dropbox\SharedFolders\NAI\empirics"  
+global root = "C:\Users\franc\OneDrive\Documents\GitHub\Chicagobooth\EconomicsPhD\Second_Year\microeconometrics_1\pset1\11423_Data_and_Programs"  
 
 
 use "$root\forcedcoexistence_webfinal.dta",clear 
