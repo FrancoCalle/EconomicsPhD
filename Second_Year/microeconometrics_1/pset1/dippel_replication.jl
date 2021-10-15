@@ -8,6 +8,7 @@ Pkg.add(["DataFrames","DataFramesMeta","Chain"])
 Pkg.add("Plots")
 Pkg.add("CategoricalArrays")
 Pkg.add("StatFiles")
+Pkg.add("Tables")
 Pkg.add("CSV")
 Pkg.instantiate()
 
@@ -21,6 +22,7 @@ using DataFrames
 # using CategoricalArrays
 using StatFiles
 using Chain
+using Tables
 using CSV
 
 
@@ -121,7 +123,7 @@ function inference(fit::olsRegression)
 
     # Calculate the covariance under homoskedasticity
     # if se_option = 'homoskedacity'
-    #   u = y - predict(fit) # residuals
+    u = y - predict(fit) # residuals
     #   xᵀx = inv(x' * x)
     #   covar = sum(u.^2) * xᵀx
     #   covar = covar .* (1 / (N - K)) # dof adjustment
@@ -131,9 +133,9 @@ function inference(fit::olsRegression)
     se = se_cluster(fit)
     t_stat = β ./ se
     p_val = 2 * cdf.(Normal(), -abs.(t_stat))
-
+    r2 = 1 - sum(u.^2)/sum((y.-mean(y)).^2)
     # Organize and return output
-    output = (β = β, se = se, t = t_stat, p = p_val)
+    output = (β = β, se = se, t = t_stat, p = p_val, r = r2)
 
     return output
 
@@ -168,6 +170,8 @@ regressionDataset[:,:clust_id] = string.(lpad.(regressionDataset[:,:eaid],3,'0')
 # Define dependent variable:
 y_name = [:logpcinc]
 
+# PANEL A:
+#
 # MODEL 1
 #---------------------------------------------------------
 # Define `independent' variables
@@ -177,8 +181,7 @@ y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,nothing,regressionDataset[:, :clust_id])
 # Get standard errors:
-results1 = inference(ols) # This is assuming homoskedacity...
-results1.t
+results1a = inference(ols) # This is assuming homoskedacity...
 
 # MODEL 2 [Check]
 #---------------------------------------------------------
@@ -188,9 +191,7 @@ x_name = [:FC, :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :log
 y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,nothing,regressionDataset[:, :clust_id])
-results2 = inference(ols) # This is assuming homoskedacity...
-results2.β
-results2.t
+results2a = inference(ols) # This is assuming homoskedacity...
 
 # MODEL 3 [Check]
 #---------------------------------------------------------
@@ -200,9 +201,7 @@ x_name = [:FC, :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :log
 y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,nothing,regressionDataset[:, :clust_id])
-results3 = inference(ols) # This is assuming homoskedacity...
-results3.β
-results3.t
+results3a = inference(ols) # This is assuming homoskedacity...
 
 # MODEL 4 [Check]
 #---------------------------------------------------------
@@ -211,9 +210,7 @@ x_name = [:FC, :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :log
 y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,nothing,regressionDataset[:, :clust_id])
-results4 = inference(ols) # This is assuming homoskedacity...
-results4.β
-results4.t
+results4a = inference(ols) # This is assuming homoskedacity...
 
 # MODEL 5 [Done]
 #---------------------------------------------------------
@@ -224,17 +221,83 @@ x_name = [:FC, :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :log
 y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,FixedEffects,regressionDataset[:, :clust_id])
-results5 = inference(ols) # This is assuming homoskedacity...
-results5.β
-results5.t
+results5a = inference(ols) # This is assuming homoskedacity...
+
+
+# PANEL B:
+#
+# MODEL 1
+#---------------------------------------------------------
+# Define `independent' variable
+x_name = [:FC]
+# Define tribe fixed effects: 
+FixedEffects = reduce(hcat, [regressionDataset[:,:eaid].==fe for fe in unique(regressionDataset[:,:eaid])])
+
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+# Estimate:
+ols = olsRegression(x,y,FixedEffects,regressionDataset[:, :clust_id])
+# Get standard errors:
+results1b = inference(ols) # This is assuming homoskedacity...
+
+# MODEL 2 
+#---------------------------------------------------------
+# Define `independent' variables
+x_name = [:FC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :logresarea_sqkm]
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+# Estimate:
+ols = olsRegression(x,y,FixedEffects,regressionDataset[:, :clust_id])
+results2b = inference(ols) # This is assuming homoskedacity...
+
+# MODEL 3
+#---------------------------------------------------------
+# Define `independent' variables
+x_name = [:FC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :logresarea_sqkm, :ea_v5, :ea_v30, :ea_v66] # removed ea_v32 due to colinearity
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+# Estimate:
+ols = olsRegression(x,y,FixedEffects[:,2:end],regressionDataset[:, :clust_id])
+results3b = inference(ols) # This is assuming homoskedacity...
+
+
+# MODEL 4 
+#---------------------------------------------------------
+x_name = [:FC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :logresarea_sqkm, :ea_v5, :ea_v30, :ea_v66, :logpop, :logpopsq, :popadultshare, :casino]
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+# Estimate:
+ols = olsRegression(x,y,FixedEffects[:,2:end],regressionDataset[:, :clust_id])
+results4b = inference(ols) # This is assuming homoskedacity...
+
+# MODEL 5 
+#---------------------------------------------------------
+#Get array of fixed effects:
+FixedEffectsState = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])])
+FixedEffects = hcat(FixedEffects, FixedEffectsState)
+x_name = [:FC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness,  :logresarea_sqkm, :ea_v5, :ea_v30, :ea_v66, :logpop, :logpopsq, :popadultshare, :casino]
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+# Estimate:
+ols = olsRegression(x,y,FixedEffects,regressionDataset[:, :clust_id])
+results5b = inference(ols) # This is assuming homoskedacity...
+
 
 # Compile results from different ols models:
 table3 = [
-results1.β[1] results2.β[1] results3.β[1] results4.β[1] results5.β[1]
-results1.t[1] results2.t[1] results3.t[1] results4.t[1] results5.t[1]
-results1.β[2] results2.β[2] results3.β[2] results4.β[2] results5.β[2]
-results1.t[2] results2.t[2] results3.t[2] results4.t[2] results5.t[2]
+results1a.β[1] results2a.β[1] results3a.β[1] results4a.β[1] results5a.β[1]
+results1a.t[1] results2a.t[1] results3a.t[1] results4a.t[1] results5a.t[1]
+results1a.β[2] results2a.β[2] results3a.β[2] results4a.β[2] results5a.β[2]
+results1a.t[2] results2a.t[2] results3a.t[2] results4a.t[2] results5a.t[2]
+results1a.r    results2a.r    results3a.r    results4a.r    results5a.r
+
+results1b.β[1] results2b.β[1] results3b.β[1] results4b.β[1] results5b.β[1]
+results1b.t[1] results2b.t[1] results3b.t[1] results4b.t[1] results5b.t[1]
+results1b.r    results2b.r    results3b.r    results4b.r    results5b.r
 ]
+
+CSV.write("table3.csv", Tables.table(table3), writeheader=false) 
+
 
 
 # function tsls_regression(y, d, z, x)
