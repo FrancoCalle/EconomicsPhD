@@ -109,6 +109,25 @@ struct probitModel
 end 
 
 
+function tsls_regression(y, d, z, x=nothing)
+ 
+    if ~isnothing(x)
+        x = hcat(x,ones(size(x)[1],1))  
+        z = hcat(z,x)
+        d = hcat(d,x)
+    end
+    
+    zᵀz = transpose(z)*z
+    zᵀd = transpose(z)*d
+    Π = inv(zᵀz) * zᵀd
+    pred = transpose(Π)*transpose(z)
+    β = inv(pred*d)*pred*y
+
+    return β
+
+end
+
+
 function predict(fit::olsRegression, data = nothing)
     
     isnothing(data) ? fitted = fit.x * fit.β : fitted = data * fit.β
@@ -166,7 +185,7 @@ end
 """ ->
 function propensityScoreMatching(x, y, d, k)
 
-    probit = probitModel(x,y)
+    probit = probitModel(x,d)
     
     pscore = predict(probit)
     
@@ -181,6 +200,7 @@ function propensityScoreMatching(x, y, d, k)
     y_cf = zeros(size(y,1),1)
 
     for ii in 1:size(pscore,1)
+        
         if d[ii] == 1 # If treated, compare to untreateds...
             k_index = kNearest(k, pscore[ii], pscore_0) 
             y_mean = mean(y_0[k_index])
@@ -305,6 +325,9 @@ regressionDataset[:,:clust_id] = string.(lpad.(regressionDataset[:,:eaid],3,'0')
 
 regressionDataset[:,:instrument_precious] = regressionDataset[:,:instrument_gold] .+ regressionDataset[:,:intrument_silver]
 
+regressionDataset[:,:wprec_enviro] = regressionDataset[:,:wgold_enviro]+regressionDataset[:,:wsilver_enviro] 
+
+
 println(sum(regressionDataset[:,:instrument_precious].==0.0), " number of 0 in instrument")
 
 # Replicate Table 3:
@@ -322,7 +345,7 @@ y, x = select_variables(regressionDataset, y_name, x_name);
 # Estimate:
 ols = olsRegression(x,y,nothing,regressionDataset[:, :clust_id])
 # Get standard errors:
-results1a = inference(ols) # This is assuming homoskedacity...
+results1a = inference(ols)
 
 # MODEL 2 [Check]
 #---------------------------------------------------------
@@ -461,131 +484,214 @@ probit.σ
 d = y
 
 
-
 # Testing propensityScoreMatching:
 #---------------------------------
 
-# Panel A: Two instruments...
-# Subpanel 1
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
+function psm_table(kn)
+
+    # Panel A: Two instruments...
+    # Subpanel 1
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a1 = propensityScoreMatching(x, y, d, kn)
 
 
-# Subpanel 2
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
+    # Subpanel 2
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a2 = propensityScoreMatching(x, y, d, kn)
 
-# Subpanel 3
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
+    # Subpanel 3
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a3 = propensityScoreMatching(x, y, d, kn)
 
-# Subpanel 4
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
+    # Subpanel 4
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a4 = propensityScoreMatching(x, y, d, kn)
 
-# Subpanel 5
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
-FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
-
-
-# Subpanel 6
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
-FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+    # Subpanel 5
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+    FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a5 = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, kn)
 
 
-
-# Panel B: One instrument...
-
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
-
-
-# Subpanel 2
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
-
-# Subpanel 3
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
-
-# Subpanel 4
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(x, y, d, 3)
-
-# Subpanel 5
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
-FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+    # Subpanel 6
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
+    FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_a6 = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, kn)
 
 
-# Subpanel 6
-y_name = [:logpcinc];
-d_name = [:FC];
-x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
-FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
-y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
-ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+
+    # Panel B: One instrument...
+
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b1 = propensityScoreMatching(x, y, d, kn)
 
 
-# MODEL 2 [Check]
+    # Subpanel 2
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b2 = propensityScoreMatching(x, y, d, kn)
+
+    # Subpanel 3
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b3 = propensityScoreMatching(x, y, d, kn)
+
+    # Subpanel 4
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b4 = propensityScoreMatching(x, y, d, kn)
+
+    # Subpanel 5
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+    FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b5 = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, kn)
+
+
+    # Subpanel 6
+    y_name = [:logpcinc];
+    d_name = [:FC];
+    x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
+    FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+    y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+    psm_b6 = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, kn)
+
+
+    # Compile results from different psm models:
+    table_psm = [
+        psm_a1[1] psm_a2[1] psm_a3[1] psm_a4[1] psm_a5[1] psm_a6[1]
+        psm_a1[2] psm_a2[2] psm_a3[2] psm_a4[2] psm_a5[2] psm_a6[2]
+
+        psm_b1[1] psm_b2[1] psm_b3[1] psm_b4[1] psm_b5[1] psm_b6[1]
+        psm_b1[2] psm_b2[2] psm_b3[2] psm_b4[2] psm_b5[2] psm_b6[2]
+    ]
+
+    return table_psm
+
+end
+
+table_psm_knn3= psm_table(3)
+table_psm_knn4= psm_table(4)
+table_psm_knn5= psm_table(5)
+table_psm_knn6= psm_table(6)
+
+
+CSV.write("table_psm_knn3.csv", Tables.table(round.(table_psm_knn3,digits=3)), writeheader=false) 
+CSV.write("table_psm_knn4.csv", Tables.table(round.(table_psm_knn4,digits=3)), writeheader=false) 
+CSV.write("table_psm_knn5.csv", Tables.table(round.(table_psm_knn5,digits=3)), writeheader=false) 
+CSV.write("table_psm_knn6.csv", Tables.table(round.(table_psm_knn6,digits=3)), writeheader=false) 
+
+
+
+
+
+# TSLS:
 #---------------------------------------------------------
-# Define `independent' variables
+
+# PANEL A
+y_name = [:logpcinc]; d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a1 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a2 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a3 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a4 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a5 = tsls_regression(y,d,z,hcat(x, FixedEffects[:,1:end-1])) 
+
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness, :wprec_enviro];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1:2]; x = H[:,3:end];
+β_iv_a6 = tsls_regression(y,d,z,hcat(x, FixedEffects[:,1:end-1])) 
 
 
-# function tsls_regression(y, d, z, x)
- 
-#     if cov = true    
-#         z = hcat(1,z,x)
-#         d = hcat(1,d,x)
-#     end
-    
-#     zᵀz = transpose(z)*z
-#     zᵀd = transpose(z)*d
-#     Π = inv(zᵀz) * zᵀd 
-#     pred = transpose(Π)*transpose(z)
-#     β = inv(pred*d)*pred*y
 
-#     return beta
+# PANEL B
+y_name = [:logpcinc]; d_name = [:FC];
+x_name = [:instrument_precious , :HC];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b1 = tsls_regression(y,d,z,x) 
 
-# end
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b2 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b3 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b4 = tsls_regression(y,d,z,x) 
+
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b5 = tsls_regression(y,d,z,hcat(x, FixedEffects[:,1:end-1])) 
+
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness, :wprec_enviro];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, H, d = select_variables(regressionDataset, y_name, x_name, d_name);
+z = H[:,1]; x = H[:,2:end];
+β_iv_b6 = tsls_regression(y,d,z,hcat(x, FixedEffects[:,1:end-1])) 
 
 
+table5 = [
+    β_iv_a1[1] β_iv_a2[1] β_iv_a3[1] β_iv_a4[1] β_iv_a5[1] β_iv_a6[1]
+    β_iv_b1[1] β_iv_b2[1] β_iv_b3[1] β_iv_b4[1] β_iv_b5[1] β_iv_b6[1]
+]
 
-
-
+CSV.write("table5.csv", Tables.table(round.(table5,digits=3)), writeheader=false) 
 
