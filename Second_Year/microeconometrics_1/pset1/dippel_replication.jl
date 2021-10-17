@@ -141,7 +141,7 @@ function kNearest(k::Int, pscorei::Float64, neighborhood::Array{Float64})
 
     #Calculate euclidean distance:
     distance = (pscorei .- neighborhood).^2 
-    distance = distance.* 1000 .+ shuffle(1:size(distance)[1]) ./ 100 # Random ties elimination
+    Random.seed!(1234); distance = distance.* 100000 .+ shuffle(1:size(distance)[1]) ./ 10000 ; # Random ties elimination
     dict = Dict(distance .=> 1:size(distance)[1])
     minK = sort(distance)[1:k]
     minKidx = [dict[ii] for ii in minK]
@@ -150,8 +150,7 @@ function kNearest(k::Int, pscorei::Float64, neighborhood::Array{Float64})
 
 end
 
-
-function propensityScoreMatching(x,y,d)
+function propensityScoreMatching(x, y, d, k)
 
     """
     Inputs
@@ -163,9 +162,30 @@ function propensityScoreMatching(x,y,d)
     α: Average Treatment Effect
     """
 
+    probit = probitModel(x,y)
+    pscore = predict(probit)
+    y_1 = y[vec(d .== 1)]
+    y_0 = y[vec(d .== 0)]
+    pscore_1 = pscore[vec(d .== 1)]
+    pscore_0 = pscore[vec(d .== 0)]
 
+    y_cf = zeros(size(y,1),1)
 
-    return 
+    for ii in 1:size(pscore,1)
+        if d[ii] == 1 # If treated, compare to untreateds...
+            k_index = kNearest(k, pscore[ii], pscore_0) 
+            y_mean = mean(y_0[k_index])
+        else
+            k_index = kNearest(k, pscore[ii], pscore_1)
+            y_mean = mean(y_1[k_index])
+        end
+        y_cf[ii] = y_mean
+    end
+
+    ATE = (sum(y[vec(d .== 1)]) + sum(y_cf[vec(d .== 0)]) - sum(y[vec(d .== 0)]) - sum(y_cf[vec(d .== 1)]))/size(y,1)
+    ATT = mean(y[vec(d .== 1)]) - mean(y_cf[vec(d .== 1)])
+
+    return ATE, ATT
 
 end
 
@@ -244,7 +264,7 @@ function inference(fit::olsRegression)
 end
 
 
-function select_variables(df::DataFrame, y_name, x_name)
+function select_variables(df::DataFrame, y_name, x_name, d_name=nothing)
 
     df = filter(y_name[1] => x -> !any(f -> f(x), (ismissing, isnothing, isnan)), df)
 
@@ -257,8 +277,14 @@ function select_variables(df::DataFrame, y_name, x_name)
     y = Matrix(df[:, y_name])
 
     x = Matrix(df[:, x_name])
+
+    if ~isnothing(d_name)
+        d = Matrix(df[:, d_name])
+    else
+        d = nothing
+    end
     
-    return y, x 
+    return y, x, d 
 
 end
 
@@ -408,8 +434,9 @@ CSV.write("table3.csv", Tables.table(table3), writeheader=false)
 
 y_name = [:FC]
 x_name = [:HC, :instrument_gold, :intrument_silver]
+d_name = [:HC]
 # Select, drop missings and convert variables to arrays
-y, x = select_variables(regressionDataset, y_name, x_name);
+y, x = select_variables(regressionDataset, y_name, x_name, d_name);
 
 
 probit = probitModel(x,y)
@@ -418,6 +445,30 @@ probit.μ
 probit.σ
 
 
+d = y
+
+
+
+# Testing propensityScoreMatching:
+#---------------------------------
+
+
+
+
+y_name = [:logpcinc]
+d_name = [:FC]
+x_name = [:instrument_gold,  :intrument_silver, :HC]
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+
+# Estimate psmatch:
+
+ATE, ATT = propensityScoreMatching(x, y, d, 4)
+
+
+
+# MODEL 2 [Check]
+#---------------------------------------------------------
+# Define `independent' variables
 
 
 # function tsls_regression(y, d, z, x)
