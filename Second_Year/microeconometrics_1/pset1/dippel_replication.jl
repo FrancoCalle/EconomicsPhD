@@ -10,6 +10,7 @@ Pkg.add("CategoricalArrays")
 Pkg.add("StatFiles")
 Pkg.add("Tables")
 Pkg.add("CSV")
+Pkg.add("Optim")
 Pkg.instantiate()
 
 #Load packages ...
@@ -24,7 +25,8 @@ using StatFiles
 using Chain
 using Tables
 using CSV
-
+using Optim
+using Random
 
 struct olsRegression
     
@@ -59,11 +61,111 @@ struct olsRegression
 end 
 
 
+struct probitModel
+    
+    θ::Array{Float64} # coefficient
+    μ::Float64 # coefficient
+    σ::Float64 # coefficient
+    x::Array{Float64} # features
+    d::Array{Float64} # dichotomous outcome
+
+    # Define constructor function
+    function probitModel(x, d)
+        """
+        Inputs: 
+        x: An array of N × K dimension (inputs).
+        d: An dichotomous array of N × 1 dimension (outputs).
+        """
+        
+        x = hcat(x,ones(size(x)[1],1))
+        
+        param_init  = zeros(size(x,2) + 2,1) .+ 0.01 
+
+        sigmoid(x) = 1/(1+exp(x))
+
+        function objective(params, x, d)
+        
+            σ = sigmoid(params[end])
+            μ = params[end-1]
+            θ = params[1:end-2]
+            yhat = x*θ
+            Φ = Normal(μ,σ)
+            log_p = d.*log.(cdf.(Φ, yhat)) + (1 .- d).*log.(1.0 .- cdf.(Φ, yhat))
+            log_L = reduce(+,log_p)
+            return -log_L
+        
+        end        
+
+        f(θ) = objective(θ, x, d)
+        
+        result = optimize(f, param_init, LBFGS())
+        
+        params_hat = Optim.minimizer(result)
+
+        new(params_hat[1:end-2], params_hat[end-1], sigmoid(params_hat[end]), x, d)
+
+    end
+
+end 
+
+
 function predict(fit::olsRegression, data = nothing)
     
     isnothing(data) ? fitted = fit.x * fit.β : fitted = data * fit.β
 
     return(fitted)
+
+end
+
+function predict(fit::probitModel, data = nothing)
+    
+    isnothing(data) ? fitted = cdf.(Normal(fit.μ, fit.σ),fit.x * fit.θ) : fitted = cdf.(Normal(fit.μ, fit.σ), data * fit.θ)
+
+    return(fitted)
+
+end
+
+
+function kNearest(k::Int, pscorei::Float64, neighborhood::Array{Float64})
+    
+    """
+    Inputs
+    k: Number of neighbors to use
+    pscorei: Propensity score for individual i, should be float
+    neighborhood: Array that contains pscore for all individuals we are comparing:
+
+    Output 
+    minKidx: minimum K indexes
+    """
+
+
+    #Calculate euclidean distance:
+    distance = (pscorei .- neighborhood).^2 
+    distance = distance.* 1000 .+ shuffle(1:size(distance)[1]) ./ 100 # Random ties elimination
+    dict = Dict(distance .=> 1:size(distance)[1])
+    minK = sort(distance)[1:k]
+    minKidx = [dict[ii] for ii in minK]
+
+    return minKidx
+
+end
+
+
+function propensityScoreMatching(x,y,d)
+
+    """
+    Inputs
+    x: Covariates used to compute score P[D = 1 | X]
+    d: Treatment variable
+    y: Outcome variable
+
+    return:
+    α: Average Treatment Effect
+    """
+
+
+
+    return 
 
 end
 
@@ -300,6 +402,24 @@ CSV.write("table3.csv", Tables.table(table3), writeheader=false)
 
 
 
+
+# Testing probit:
+#----------------------------
+
+y_name = [:FC]
+x_name = [:HC, :instrument_gold, :intrument_silver]
+# Select, drop missings and convert variables to arrays
+y, x = select_variables(regressionDataset, y_name, x_name);
+
+
+probit = probitModel(x,y)
+probit.θ
+probit.μ
+probit.σ
+
+
+
+
 # function tsls_regression(y, d, z, x)
  
 #     if cov = true    
@@ -316,6 +436,7 @@ CSV.write("table3.csv", Tables.table(table3), writeheader=false)
 #     return beta
 
 # end
+
 
 
 
