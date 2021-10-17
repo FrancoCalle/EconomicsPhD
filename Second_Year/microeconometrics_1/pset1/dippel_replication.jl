@@ -64,8 +64,8 @@ end
 struct probitModel
     
     θ::Array{Float64} # coefficient
-    μ::Float64 # coefficient
-    σ::Float64 # coefficient
+    μ::Float64 # Dist. expected value
+    σ::Float64 # Dist. variance
     x::Array{Float64} # features
     d::Array{Float64} # dichotomous outcome
 
@@ -125,48 +125,57 @@ function predict(fit::probitModel, data = nothing)
 
 end
 
+@doc """
+    Inputs\n
+    k: Number of neighbors to use\n
+    pscorei: Propensity score for individual i, should be float\n
+    neighborhood: Array that contains pscore for all individuals we are comparing\n
 
-function kNearest(k::Int, pscorei::Float64, neighborhood::Array{Float64})
-    
-    """
-    Inputs
-    k: Number of neighbors to use
-    pscorei: Propensity score for individual i, should be float
-    neighborhood: Array that contains pscore for all individuals we are comparing:
-
-    Output 
+    Output \n
     minKidx: minimum K indexes
-    """
-
+""" ->
+function kNearest(k::Int, pscorei::Float64, neighborhood::Array{Float64})
 
     #Calculate euclidean distance:
     distance = (pscorei .- neighborhood).^2 
+
     Random.seed!(1234); distance = distance.* 100000 .+ shuffle(1:size(distance)[1]) ./ 10000 ; # Random ties elimination
+    
     dict = Dict(distance .=> 1:size(distance)[1])
+    
     minK = sort(distance)[1:k]
+    
     minKidx = [dict[ii] for ii in minK]
 
     return minKidx
 
 end
 
+
+
+@doc """
+    Inputs \n
+    x: Covariates used to compute score P[D = 1 | X] \n
+    d: Treatment variable \n
+    y: Outcome variable \n
+    k: Number of neighbors \n
+
+    Output \n
+    ATE: Average Treatment Effect \n
+    ATT: Average Treatment on the Treated 
+""" ->
 function propensityScoreMatching(x, y, d, k)
 
-    """
-    Inputs
-    x: Covariates used to compute score P[D = 1 | X]
-    d: Treatment variable
-    y: Outcome variable
-
-    return:
-    α: Average Treatment Effect
-    """
-
     probit = probitModel(x,y)
+    
     pscore = predict(probit)
+    
     y_1 = y[vec(d .== 1)]
+    
     y_0 = y[vec(d .== 0)]
+    
     pscore_1 = pscore[vec(d .== 1)]
+    
     pscore_0 = pscore[vec(d .== 0)]
 
     y_cf = zeros(size(y,1),1)
@@ -293,6 +302,10 @@ forcedcoexistence_webfinal = DataFrame(load("11423_Data_and_Programs/forcedcoexi
 regressionDataset = subset(forcedcoexistence_webfinal, :year => ByRow(year -> year ==(2000)))
 
 regressionDataset[:,:clust_id] = string.(lpad.(regressionDataset[:,:eaid],3,'0')) .* string.(lpad.(regressionDataset[:,:statenumber],2,'0'))
+
+regressionDataset[:,:instrument_precious] = regressionDataset[:,:instrument_gold] .+ regressionDataset[:,:intrument_silver]
+
+println(sum(regressionDataset[:,:instrument_precious].==0.0), " number of 0 in instrument")
 
 # Replicate Table 3:
 # Define dependent variable:
@@ -452,18 +465,101 @@ d = y
 # Testing propensityScoreMatching:
 #---------------------------------
 
-
-
-
-y_name = [:logpcinc]
-d_name = [:FC]
-x_name = [:instrument_gold,  :intrument_silver, :HC]
+# Panel A: Two instruments...
+# Subpanel 1
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC];
 y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
 
-# Estimate psmatch:
 
-ATE, ATT = propensityScoreMatching(x, y, d, 4)
+# Subpanel 2
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
 
+# Subpanel 3
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+# Subpanel 4
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+# Subpanel 5
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+
+
+# Subpanel 6
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_gold, :intrument_silver , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+
+
+
+# Panel B: One instrument...
+
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+
+# Subpanel 2
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+# Subpanel 3
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+# Subpanel 4
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(x, y, d, 3)
+
+# Subpanel 5
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
+
+
+# Subpanel 6
+y_name = [:logpcinc];
+d_name = [:FC];
+x_name = [:instrument_precious , :HC, :logpcinc_co, :logunempl_co, :logdist, :logruggedness, :logresarea_sqkm, :ea_v5,  :ea_v30, :ea_v32, :ea_v66, :logpop,  :popadultshare, :casino, :removal, :homelandruggedness];
+FixedEffects = reduce(hcat, [regressionDataset[:,:statenumber].==fe for fe in unique(regressionDataset[:,:statenumber])]);
+y, x, d = select_variables(regressionDataset, y_name, x_name, d_name);
+ATE, ATT = propensityScoreMatching(hcat(x, FixedEffects[:,1:end-1]), y, d, 3)
 
 
 # MODEL 2 [Check]
