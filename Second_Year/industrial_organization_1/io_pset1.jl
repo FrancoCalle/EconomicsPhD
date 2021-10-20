@@ -28,6 +28,8 @@ using Random
 
 include(joinpath("..", "..","fc_toolkit.jl"))
 
+Random.seed!(1234);
+
 # Question 2
 
 function labor_demand(k_it, a_it, w_it, p, α)
@@ -104,7 +106,8 @@ println("Addition of participation parameters: ", round(res.β[1] + res.β[2], d
 FixedEffects = reduce(hcat, [firm_fe .== fe for fe in unique(firm_fe)]);
 fitOLS = olsRegression(X, Y, FixedEffects, nothing);
 res = inference(fitOLS);
-
+res.β
+res.se
 println("Addition of participation parameters: ", round(res.β[1] + res.β[2], digits=3), "\n", "β coefficients: ", round.(res.β[1:2], digits = 3), " p-values: ", round.(res.p[1:2], digits = 3))
 
 # Random effects.
@@ -122,10 +125,12 @@ fm1 = fit(MixedModel, @formula(y ~ 1 + l + k + (1|id)), df);
 fm1.β
 
 # E. Is there anything to use as instrument? ...
-Pkg.add("Econometrics")
-using Econometrics
+# Pkg.add("Econometrics")
+Pkg.add("FixedEffectModels")
+using FixedEffectModels
 
-model = fit(Econometrics,@formula(y ~ k + (l ~ w)),df)
+
+model = reg(df, @formula(y ~ k + (l ~ w)))
 
 # Found point estimate:
 β = tsls_regression(Y, X, w_placeholder, FixedEffects[:,1:end-1])
