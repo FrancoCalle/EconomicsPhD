@@ -152,8 +152,15 @@ function tsls_regression(y, d, z, x=nothing, intercept=true)
         d = hcat(d,ones(size(x)[1],1))
     end
     
+    Q_Z, R_Z = qr(z)
+    
+    ZZ_inv = inv(cholesky(R_Z' * R_Z))
+    
+    P_Z = z * ZZ_inv * z'
+    
+    β = inv(d' * P_Z * d) * d' * P_Z * y
+    
     Π = z\d
-    β = (Π'*z'*d)/(Π'*z'*y)
     
     return β, Π
 

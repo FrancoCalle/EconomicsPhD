@@ -1,4 +1,4 @@
-# WATCH OUT CLONERS I CAN SEE YOU!!!
+# If you like what you see, don't forget to follow or(and) give me a star ⋆ in GitHub 
 using Pkg
 
 #Install ...
@@ -114,6 +114,7 @@ density!(standard_approx(0.025), xlims = (-2.5,4.5), label="Standard Asymptotics
 #------------------------------------------------------------------------------------------------
 # Part D: Now multiple weak IV
 #------------------------------------------------------------------------------------------------
+include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
 
 function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
@@ -132,6 +133,13 @@ function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
         df = DataFrame(:Y => Y[:], :D => D[:], :Z1 => Z[:,1][:])
         β = coef(reg(df, @formula(Y ~ 0 + (D ~ 0 + Z1 ))))
         append!(ivresults, β)
+        """
+        Not using this one because the previous tsls estimator is faster,
+        but results are the same. If you want to see you can uncomment the
+        following two lines and run the code again.
+        β, _= tsls_regression(Y, D, Z[:,1], nothing, false) 
+        append!(ivresults, β[1])
+        """
     end
     
     # Filter to values from -2 to 4, as in class notes
