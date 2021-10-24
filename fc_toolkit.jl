@@ -128,21 +128,34 @@ struct probitModel
 end 
 
 
-function tsls_regression(y, d, z, x=nothing)
+@doc """
+    Inputs\n
+    y: Outcome array N x 1 features
+    d: Treatment variable array of N x 1
+    z: Instrument vector Array of N x F
+    x: Covariates N x K , it can be nothing
+    intercept: Bool (default = true)
+
+    Output \n
+    β: Second stage coefficients
+    Π: First stage coefficients
+""" ->
+function tsls_regression(y, d, z, x=nothing, intercept=true)
  
     if ~isnothing(x)
-        x = hcat(x,ones(size(x)[1],1))  
         z = hcat(z,x)
         d = hcat(d,x)
     end
-    
-    zᵀz = transpose(z)*z
-    zᵀd = transpose(z)*d
-    Π = inv(zᵀz) * zᵀd
-    pred = transpose(Π)*transpose(z)
-    β = inv(pred*d)*pred*y
 
-    return β
+    if intercept == true
+        z = hcat(z,ones(size(z)[1],1))
+        d = hcat(d,ones(size(x)[1],1))
+    end
+    
+    Π = z\d
+    β = (Π'*z'*d)/(Π'*z'*y)
+    
+    return β, Π
 
 end
 
