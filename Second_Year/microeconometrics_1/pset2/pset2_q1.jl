@@ -1,3 +1,4 @@
+# WATCH OUT CLONERS I CAN SEE YOU!!!
 using Pkg
 
 #Install ...
@@ -13,9 +14,11 @@ Pkg.add("CSV")
 Pkg.add("Optim")
 Pkg.add("StatsPlots")
 Pkg.instantiate()
+Pkg.add("FixedEffectModels")
 
 #Load packages ...
 
+using FixedEffectModels
 using Distributions
 using LinearAlgebra
 # using StatsBase
@@ -25,7 +28,7 @@ using Plots
 using StatFiles
 using Chain
 using Tables
-using CSV
+# using CSV
 using Optim
 using Random
 using StatsPlots
@@ -33,8 +36,6 @@ using StatsPlots
 include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
 # Replicate Monte Carlo simulation from class notes
-
-
 
 # IV usual limit approximation:
 #-------------------------------------
@@ -46,7 +47,7 @@ function iv_mc_simulations(γ ,ρ_uv=0.99, n=1000, m=10000)
     ivresults = Vector{Float64}()
 
     for mm in 1:m
-        uv = rand(MvNormal(μ_uv, σ_uv), N)'
+        uv = rand(MvNormal(μ_uv, σ_uv), n)'
         Z = rand(Normal(0,1),n)
         D = γ * Z + uv[:,2]
         Y = uv[:,1]
@@ -110,13 +111,10 @@ density!(standard_approx(0.025), xlims = (-2.5,4.5), label="Standard Asymptotics
 
 γ_n = 0.2
 
+#------------------------------------------------------------------------------------------------
+# Part D: Now multiple weak IV
+#------------------------------------------------------------------------------------------------
 
-# Now multiple weak IV
-#-------------------------------------
-Pkg.add("FixedEffectModels")
-using FixedEffectModels
-
-include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
 function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
     
@@ -126,7 +124,7 @@ function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
     ivresults = Vector{Float64}()
     
     for mm in 1:m
-        uv = rand(MvNormal(μ_uv, σ_uv), N)'
+        uv = rand(MvNormal(μ_uv, σ_uv), n)'
         Σ_z = Diagonal(ones(k)) .+ zeros(k,k)
         Z = rand(MvNormal(zeros(k), Σ_z), n)'
         D = Z * γ .+ uv[:,2]
@@ -189,39 +187,70 @@ function multivariate_weak_iv_approximation(γ_n ,ρ_uv=0.99, n=1000, num_simdra
     μ² = γ'*Q_zz * γ / σ_v
     if chol == true
         U = Array(cholesky(Q_zz).U)
-        println("Used cholesky decomposition...")
         μ  = γ'*U / σ_v
+        # println("Used cholesky decomposition...")
     else
-        println("Used plain square mat...")
         μ  = γ'*sqrt(Q_zz) / σ_v
+        # println("Used plain square mat...")
     end
 
     approximation = (σ_u / σ_v) .* (μ*rrf')./(μ²./√k .+ μ*rfs')
     
     # Filter to values from -2 to 4, as in class notes
-    return filter(x -> (x > -3 && x < 3), approximation)
+    return filter(x -> (x > -3 && x < 3), approximation), μ²
 
-end  
-
-
-ρ = 0.9
-k = 100;
-γ = ones(k,1).*0.025;
-
-density(multiple_iv_mc_simulations(γ,ρ), xlims = (-3,3), label="True Dist",linewidth=2.5)
-density!(multivariate_weak_iv_approximation(γ,ρ), xlims = (-3,3), label="Weak IV Asymptotics",linewidth=2.5, linestyle=:dash)
-# density!(multivariate_weak_iv_approximation(γ,ρ), xlims = (-3,3), label="Weak IV Asymptotics",linewidth=2.5, linestyle=:dash)
-density!(multivariate_standard_approximation(γ), xlims = (-3,3), label="Standard Asymptotics",linewidth=2.5, linestyle=:dash)
+end
 
 
 # Numerical example:
-approximation = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000);
-approximation_cholesky = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000, true);
 
-density(approximation, xlims = (-3,3), label="√Q_zz",linewidth=2.5, color=:red)
-density!(approximation_cholesky, xlims = (-3,3), label="Cholesky Decomp", linewidth=2.5, color=:blue, linestyle=:dash)
+K = 4
+ρ = 0.9
+γ = ones(K,1).*0.025;
+true_distribution = multiple_iv_mc_simulations(γ,ρ)
+approximation, _ = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000);
+approximation_cholesky, _  = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000, true);
+
+density(true_distribution, xlims = (-3,3), label="True Dist",linewidth=3, color=:blue)
+density!(approximation_cholesky, xlims = (-3,3), label="Weak IV Approx. Cholesky",linewidth=2.5, linestyle=:dash)
+density!(approximation, xlims = (-3,3), label="Weak IV Approx.",linewidth=3, linestyle=:dashdot)
+density!(multivariate_standard_approximation(γ), xlims = (-3,3), label="Standard Asymptotics",linewidth=2.5, linestyle=:dash)
+plot!(legend=:topleft)
+savefig("Multivariate_IV_Approximation.pdf")
 
 
+#------------------------------------------------------------
+# Part E: Search μ^2 for different biases and K. 
+#------------------------------------------------------------
+
+
+function get_bias(δ, K=3, ρ=0.99)
+    γ = ones(K,1).*δ;
+    approximation, μ² = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000);
+    bias = mean(approximation)
+    return [bias μ²[1]]
+end
+
+μ_grid = zeros(length(3:30), 4)
+grid_δ = 0.001:0.001:0.25
+
+for K in 3:30
+    println("Number of covariates: ", K)
+    bias_list = get_bias.(grid_δ, K)
+    bias_list = vcat(bias_list...)
+
+    μ_grid[K-2, 1] = bias_list[argmin(abs.(bias_list[:,1] .- 0.05)),2]
+    μ_grid[K-2, 2] = bias_list[argmin(abs.(bias_list[:,1] .- 0.1)),2]
+    μ_grid[K-2, 3] = bias_list[argmin(abs.(bias_list[:,1] .- 0.2)),2]
+    μ_grid[K-2, 4] = bias_list[argmin(abs.(bias_list[:,1] .- 0.3)),2]
+end
+
+CSV.write("q1E_table.csv",  Tables.table(μ_grid), writeheader=false)
+
+
+#------------------------------------------------------------
+# Part F: 
+#------------------------------------------------------------
 
 
 
