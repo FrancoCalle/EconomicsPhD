@@ -1,4 +1,3 @@
-# If you like what you see, don't forget to follow or(and) give me a star ⋆ in GitHub :)
 using Pkg
 
 #Install ...

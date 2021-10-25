@@ -99,9 +99,6 @@ end
 
 
 
-
-
-
 function generateTable4(df = census_data, controlVariables, depvar)
   # TODO: work on inference function for tsls ...
 
@@ -114,29 +111,30 @@ function generateTable4(df = census_data, controlVariables, depvar)
   #Ordinary Least Squares [Panels 1 - 4]
   #------------------------------------------------------------------------------
   #Specification 1:
+  x_names = treatment
   Y, X, _, _  = select_variables(df, depvar, x_names)
-  fit = olsRegression(Y, D, Z)
+  fit = olsRegression(Y, X, nothing, cluster)
   fit.β
   # inference(fit)
 
   #Specification 2:
-  x_names = controlVariables[:controlVariableList]
-  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
-  fit = tsls_regression(Y, D, Z, X)
+  x_names = vcat(treatment, controlVariables[:controlVariableList])
+  Y, X, _, _  = select_variables(df, depvar, x_names)
+  fit = olsRegression(Y, X, nothing, cluster)
   fit.β
   # inference(fit)
 
   #Specification 3:
-  x_names = controlVariables[:controlVariableList]
-  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
-  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  x_names = vcat(treatment, controlVariables[:controlVariableList])
+  Y, X, _, _  = select_variables(df, depvar, x_names)
+  fit = olsRegression(Y, X, FixedEffects, cluster)
   fit.β
   # inference(fit)
   
   #Specification 4:
-  x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
-  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
-  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  x_names = vcat(treatment, controlVariables[:controlVariableList], controlVariables[:additionalControls])
+  Y, X, _, _  = select_variables(df, depvar, x_names)
+  fit = olsRegression(Y, X, FixedEffects, cluster)
   fit.β
 
   #Two stage least squares [Panels 5 - 8]
