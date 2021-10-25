@@ -11,6 +11,7 @@ Pkg.add("StatFiles")
 Pkg.add("Tables")
 Pkg.add("CSV")
 Pkg.add("Optim")
+Pkg.add("Missings")
 Pkg.instantiate()
 
 #Load packages ...
@@ -27,7 +28,7 @@ using Tables
 using CSV
 using Optim
 using Random
-
+using Missings
 
 @doc """
     Inputs\n
@@ -47,7 +48,7 @@ struct olsRegression
     cl::Array # clusters
 
     # Define constructor function
-    function olsRegression(x::Array{Float64}, y::Array{Float64}, fe = nothing, cl = nothing)
+    function olsRegression(x, y, fe = nothing, cl = nothing)
         """
         Inputs: 
         X: An array of N × K dimension (inputs).
@@ -347,11 +348,11 @@ function select_variables(df::DataFrame, y_name, x_name, d_name=nothing)
     x = Matrix(df[:, x_name])
 
     if ~isnothing(d_name)
-        d = Matrix(df[:, d_name])
+        d = disallowmissing(Matrix(df[:, d_name]))
     else
         d = nothing
     end
     
-    return y, x, d 
+    return disallowmissing(y), disallowmissing(x), d 
 
 end

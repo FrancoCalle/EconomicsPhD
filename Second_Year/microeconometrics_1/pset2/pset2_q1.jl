@@ -1,4 +1,4 @@
-# If you like what you see, don't forget to follow or(and) give me a star ⋆ in GitHub 
+# If you like what you see, don't forget to follow or(and) give me a star ⋆ in GitHub :)
 using Pkg
 
 #Install ...
@@ -231,16 +231,15 @@ savefig("Multivariate_IV_Approximation.pdf")
 # Part E: Search μ^2 for different biases and K. 
 #------------------------------------------------------------
 
-
 function get_bias(δ, K=3, ρ=0.99)
     γ = ones(K,1).*δ;
-    approximation, μ² = multivariate_weak_iv_approximation(γ ,ρ , 1000, 100000);
+    approximation, μ² = multivariate_weak_iv_approximation(γ , ρ , 1000, 100000);
     bias = mean(approximation)
     return [bias μ²[1]]
 end
 
 μ_grid = zeros(length(3:30), 4)
-grid_δ = 0.001:0.001:0.25
+grid_δ = 0.001:0.0002:0.25
 
 for K in 3:30
     println("Number of covariates: ", K)
@@ -259,6 +258,56 @@ CSV.write("q1E_table.csv",  Tables.table(μ_grid), writeheader=false)
 #------------------------------------------------------------
 # Part F: 
 #------------------------------------------------------------
+
+# Assume what stock and yogo said is true (TODO: derive the proof of it...)
+
+c_value = zeros(length(3:30), 4)
+
+for ii in 1:4
+    for K in 3:30
+        q = quantile(NoncentralChisq(K, μ_grid[K-2,ii].*K), .95)./K
+        c_value[K-2, ii] = q
+    end
+end
+
+CSV.write("c_value_table.csv",  Tables.table(c_value), writeheader=false)
+
+
+
+plot(c_value[:,1], label=".05 Bias")
+plot!(c_value[:,2], label=".1 Bias")
+plot!(c_value[:,3], label=".2 Bias")
+plot!(c_value[:,4], label=".3 Bias")
+plot!(legend=:topleft)
+savefig("CriticalValue_05.pdf")
+
+
+plot(μ_grid[:,1], label=".05 Bias")
+plot!(μ_grid[:,2], label=".1 Bias")
+plot!(μ_grid[:,3], label=".2 Bias")
+plot!(μ_grid[:,4], label=".3 Bias")
+plot!(legend=:topleft)
+savefig("Eigenvalue_bias.pdf")
+
+#_--------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
