@@ -15,7 +15,7 @@ Pkg.add("StatsPlots")
 Pkg.instantiate()
 Pkg.add("Missings")
 Pkg.add("FixedEffectModels")
-Pkg.add("RCall")
+
 
 #Load packages ...
 
@@ -32,7 +32,7 @@ using Random
 using StatsPlots
 using CategoricalArrays
 using Missings
-using RCall 
+
 
 include(joinpath(@__DIR__, "..", "..", "..","fc_toolkit.jl"))
 
@@ -45,15 +45,9 @@ function setVariableNames()
                             "prop_matric_m0","prop_matric_f0", "baseline_hhdens0", 
                             "kms_to_subs0"]
 
-  controlVariableNameList = ["Poverty Rate", "Female-headed HHs", "Adult sex ratio (F/M)", 
-                                "Indian, white adults x 10", "Kilometers to road", "Kilometers to town", 
-                                "Men with high school", "Women with high school", "Household density", 
-                                "Kilometers from grid"]
-
   additionalControls = ["d_prop_waterclose", "d_prop_flush"]
 
   controlVariables = Dict(:controlVariableList => [Symbol(x) for x in controlVariableList], 
-                          :controlVariableNameList => [Symbol(x) for x in controlVariableNameList],  
                           :additionalControls => [Symbol(x) for x in additionalControls])
 
   return controlVariables
@@ -78,26 +72,26 @@ function generateTable3(df = census_data, controlVariables)
 
   #Specification 1:
   Y, X, _  = select_variables(df, [:T], [:mean_grad_new])
-  fit = olsRegression(X ./10 , Y, nothing, cluster)
+  fit = olsRegression(Y, X ./10 ,  nothing, cluster)
   inference(fit)
 
   #Specification 2:
   x_names = vcat([:mean_grad_new],controlVariables[:controlVariableList])
   Y, X, _  = select_variables(df, [:T], x_names)
-  fit = olsRegression(X ./10, Y, nothing, cluster)
+  fit = olsRegression(Y, X ./10,  nothing, cluster)
   inference(fit)
 
   #Specification 3:
   x_names = vcat([:mean_grad_new],controlVariables[:controlVariableList])
   Y, X, _  = select_variables(df, [:T], x_names)
-  fit = olsRegression(X  ./10 , Y, FixedEffects, cluster)
+  fit = olsRegression(Y, X  ./10 , FixedEffects, cluster)
   fit.β
   inference(fit)
   
   #Specification 4:
   x_names = vcat([:mean_grad_new],controlVariables[:controlVariableList],controlVariables[:additionalControls])
   Y, X, _  = select_variables(df, [:T], x_names)
-  fit = olsRegression(X ./10 , Y, FixedEffects, cluster)
+  fit = olsRegression(Y, X ./10 , FixedEffects, cluster)
   inference(fit)
   
   return table3
@@ -107,6 +101,81 @@ end
 
 
 
+
+function generateTable4(df = census_data, controlVariables, depvar)
+  # TODO: work on inference function for tsls ...
+
+  instrument = [:mean_grad_new]
+  treatment = [:T]
+  cluster = CategoricalArray(df[:, :placecode0])
+  FixedEffects = Matrix(reduce(hcat, [df[:,:dccode0].==fe for fe in unique(df[:,:dccode0])]))
+
+
+  #Ordinary Least Squares [Panels 1 - 4]
+  #------------------------------------------------------------------------------
+  #Specification 1:
+  Y, X, _, _  = select_variables(df, depvar, x_names)
+  fit = olsRegression(Y, D, Z)
+  fit.β
+  # inference(fit)
+
+  #Specification 2:
+  x_names = controlVariables[:controlVariableList]
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X)
+  fit.β
+  # inference(fit)
+
+  #Specification 3:
+  x_names = controlVariables[:controlVariableList]
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  fit.β
+  # inference(fit)
+  
+  #Specification 4:
+  x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  fit.β
+
+  #Two stage least squares [Panels 5 - 8]
+  #-----------------------------------------------------------------------------
+
+  #Specification 1:
+  Y, _, D, Z  = select_variables(df, depvar, nothing, treatment, instrument)
+  fit = tsls_regression(Y, D, Z)
+  fit.β
+  # inference(fit)
+
+  #Specification 2:
+  x_names = controlVariables[:controlVariableList]
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X)
+  fit.β
+  # inference(fit)
+
+  #Specification 3:
+  x_names = controlVariables[:controlVariableList]
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  fit.β
+  # inference(fit)
+  
+  #Specification 4:
+  x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
+  Y, X, D, Z  = select_variables(df, depvar, x_names, treatment, instrument)
+  fit = tsls_regression(Y, D, Z, X, FixedEffects)
+  fit.β
+
+  # inference(fit)
+  
+  return table3
+end
+
+
+depvar = [:d_prop_emp_f]
+depvar = [:d_prop_emp_m]
 
 #----------------------------------------------------------------------------------------
 # Tweak dataset to get exact point estimates:

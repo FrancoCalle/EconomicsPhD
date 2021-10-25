@@ -48,11 +48,11 @@ struct olsRegression
     cl::Array # clusters
 
     # Define constructor function
-    function olsRegression(x, y, fe = nothing, cl = nothing)
+    function olsRegression(y, x, fe = nothing, cl = nothing)
         """
         Inputs: 
-        X: An array of N × K dimension (inputs).
         Y: An array of N × 1 dimension (outputs).
+        X: An array of N × K dimension (inputs).
         cl: An array of N × missing dimension (clusters)
         """
         
@@ -130,41 +130,60 @@ end
 
 
 @doc """
-    Inputs\n
+    tsls_regression(y, d, z, x=nothing, fe=nothing, intercept=true)\n
+    Inputs
     y: Outcome array N x 1 features
     d: Treatment variable array of N x 1
     z: Instrument vector Array of N x F
-    x: Covariates N x K , it can be nothing
+    x: Control variables N x K, it can be ::nothing
+    fe: Dichotomous Array N x nFixedEffects
     intercept: Bool (default = true)
 
-    Output \n
+    Output
     β: Second stage coefficients
     Π: First stage coefficients
 """ ->
-function tsls_regression(y, d, z, x=nothing, intercept=true)
- 
-    if ~isnothing(x)
-        z = hcat(z,x)
-        d = hcat(d,x)
-    end
+struct tsls_regression
+    
+    β::Array{Float64} # coefficient
+    x::Array{Float64} # features
+    y::Array{Float64} # response
+    d::Array{Float64}
+    cl::Array # clusters
 
-    if intercept == true
-        z = hcat(z,ones(size(z)[1],1))
-        d = hcat(d,ones(size(x)[1],1))
-    end
-    
-    Q_Z, R_Z = qr(z)
-    
-    ZZ_inv = inv(cholesky(R_Z' * R_Z))
-    
-    P_Z = z * ZZ_inv * z'
-    
-    β = inv(d' * P_Z * d) * d' * P_Z * y
-    
-    Π = z\d
-    
-    return β, Π
+    function tsls_regression(y, d, z, x=nothing, fe=nothing, cl=nothing, intercept=true)
 
+        n = size(z)[1]
+        
+        if ~isnothing(x)
+            z = hcat(z,x)
+            d = hcat(d,x)
+        end
+
+        if ~isnothing(fe)
+            intercept = false
+            z = hcat(z,fe)
+            d = hcat(d,fe)
+        end
+
+        if intercept == true
+            z = hcat(z,ones(n,1))
+            d = hcat(d,ones(n,1))
+        end
+        
+        Q_Z, R_Z = qr(z)
+        
+        ZZ_inv = inv(cholesky(R_Z' * R_Z))
+        
+        P_Z = z * ZZ_inv * z'
+        
+        β = inv(d' * P_Z * d) * d' * P_Z * y
+        
+        Π = z\d
+        
+        return isnothing(cl) ? new(β, y, d, z, [NaN]) : new(β, y, d, z, cl)
+
+    end
 end
 
 
@@ -333,26 +352,55 @@ function inference(fit::olsRegression)
 end
 
 
-function select_variables(df::DataFrame, y_name, x_name, d_name=nothing)
+@doc """
+    select_variables(df::DataFrame, y_name::list, x_name::list, z_name::list)\n
+    Inputs \n
+    df: DataFrame
+    y_name: List of symbols with outcome names. 
+    x_name: List of symbols with covariates names. 
+    d_name: List of symbols with endogenous. 
+    z_name: List of symbols with exogenous. 
 
-    df = filter(y_name[1] => x -> !any(f -> f(x), (ismissing, isnothing, isnan)), df)
+    Output \n
+    y: N x 1 Array with missings disallowed
+    x: N x d_H Array with missings disallowed
+    d: N x d_F Array with missings disallowed
+""" ->
+function select_variables(df::DataFrame, y_name, x_name=nothing, d_name=nothing, z_name=nothing)
 
-    for n in 1:length(x_name)
+    # Join all names in all_names
+    all_names = []
+    try append!(all_names, y_name) catch end
+    try append!(all_names, x_name) catch end
+    try append!(all_names, d_name) catch end
+    try append!(all_names, z_name) catch end
 
-        df = filter(x_name[n] => x -> !any(f -> f(x), (ismissing, isnothing, isnan)), df)
+    for n in 1:length(all_names)
+
+        df = filter(all_names[n] => x -> !any(f -> f(x), (ismissing, isnothing, isnan)), df)
 
     end
 
-    y = Matrix(df[:, y_name])
-
-    x = Matrix(df[:, x_name])
+    y = disallowmissing(Matrix(df[:, y_name]))
 
     if ~isnothing(d_name)
         d = disallowmissing(Matrix(df[:, d_name]))
     else
-        d = nothing
+        d=nothing
+    end
+
+    if ~isnothing(x_name)
+        x = disallowmissing(Matrix(Matrix(df[:, x_name])))
+    else
+        x=nothing
+    end
+
+    if ~isnothing(z_name)
+        z = disallowmissing(Matrix(df[:, z_name]))
+    else
+        z=nothing
     end
     
-    return disallowmissing(y), disallowmissing(x), d 
+    return y, x, d, z
 
 end
