@@ -195,6 +195,15 @@ function predict(fit::olsRegression, data = nothing)
 
 end
 
+
+function predict(fit::tsls_regression, data = nothing)
+    
+    isnothing(data) ? fitted = fit.d * fit.β : fitted = data * fit.β
+
+    return(fitted)
+
+end
+
 function predict(fit::probitModel, data = nothing)
     
     isnothing(data) ? fitted = cdf.(Normal(fit.μ, fit.σ),fit.x * fit.θ) : fitted = cdf.(Normal(fit.μ, fit.σ), data * fit.θ)
@@ -289,11 +298,12 @@ function se_cluster(fit::olsRegression)
     n = size(y, 1); 
     k = size(x, 2);
 
-    res = y - predict(ols)
+    res = y - predict(fit)
     xᵀx = x'*x
 
     clusters = unique(cl)
     C = length(clusters)
+    R = (C / (C-1)) * ((n-1)/(n-k))
 
     function clust_residuals(c)
 
@@ -310,10 +320,22 @@ function se_cluster(fit::olsRegression)
                             clusters
                             )
     
-    Meat = reduce(+, meat_cluster)/n
+    Meat = reduce(+, meat_cluster.*R)
     Bread = inv(xᵀx)
 
-    varcov = (C*(n-1) / ((C-1)*(n-k))) * n * Bread' * Meat * Bread
+    varcov =   Bread' * Meat * Bread
+    
+    function mat_posdef_fix(X::Matrix; tol = 1e-10) # Thanks Ed.
+        if any(diag(X) .< tol)
+            e_vals, e_vecs = eigen(Symmetric(X))
+            e_vals[e_vals .<= tol] .= tol
+            X = e_vecs * Diagonal(e_vals) * e_vecs'
+        end
+        return X
+    end
+
+    vcov_matrix = mat_posdef_fix(varcov)
+    
     se_cluster = sqrt.(diag(varcov))
 
     return se_cluster
@@ -334,15 +356,15 @@ function inference(fit::olsRegression)
     # Calculate the covariance under homoskedasticity
     # if se_option = 'homoskedacity'
     u = y - predict(fit) # residuals
-      xᵀx = inv(x' * x)
-      covar = sum(u.^2) * xᵀx
-      covar = covar .* (1 / (N - K)) # dof adjustment
+    # xᵀx = inv(x' * x)
+    # covar = sum(u.^2) * xᵀx
+    # covar = covar .* (1 / (N - K)) # dof adjustment
 
     #Get standard errors, t-statistics, and p-values
-    se = sqrt.(covar[diagind(covar)])
-    # se = se_cluster(fit)
+    # se = sqrt.(covar[diagind(covar)])
+    se = se_cluster(fit)
     t_stat = β ./ se
-    p_val = 2 * cdf.(Normal(), -abs.(t_stat))
+    p_val = 2 .* cdf.(TDist(N-K), - abs.(t_stat))
     r2 = 1 - sum(u.^2)/sum((y.-mean(y)).^2)
     # Organize and return output
     output = (β = β, se = se, t = t_stat, p = p_val, r = r2)
