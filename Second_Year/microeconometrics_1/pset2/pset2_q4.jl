@@ -305,15 +305,21 @@ function solve_part_c(depvar)
 
   # Specification 6:
   Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β = jacknife_iv_estimation(Y, D, Z, X, nothing, true)
+  β_6 = jacknife_iv_estimation(Y, D, Z, X, nothing, true)
 
   # Specification 7:
   Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
+  β_7 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
 
   # Specification 8:
   x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
   Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
+  β_8 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
+
+  return Dict(:model6 => β_6, :model7 => β_7, :model8 => β_8)
 
 end
+
+
+results_female = solve_part_c([:d_prop_emp_f])
+results_male = solve_part_c([:d_prop_emp_m])
