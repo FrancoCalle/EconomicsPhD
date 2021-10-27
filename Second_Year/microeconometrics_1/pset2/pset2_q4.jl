@@ -12,14 +12,13 @@ Pkg.add("Tables")
 Pkg.add("CSV")
 Pkg.add("Optim")
 Pkg.add("StatsPlots")
-Pkg.instantiate()
+# Pkg.instantiate()
 Pkg.add("Missings")
 Pkg.add("FixedEffectModels")
 
 
 #Load packages ...
 
-using FixedEffectModels
 using Distributions
 using LinearAlgebra
 using DataFrames
@@ -217,11 +216,7 @@ function anderson_rubin_test(df, depvar, controlVariables, min_β=-.3, max_β=0.
 end
 
 
-# y = Y
-# d = D
-# z = Z
-
-function jacknife_iv_estimation(y, d, z, x=nothing, fixed_effects=nothing, intercept=true)
+function jacknife_iv_estimation(y, d, z, x=nothing, fixed_effects=nothing, intercept=false)
 
   # Make matrix for both first and second stage 
   n = size(y,1)
@@ -274,7 +269,7 @@ function solve_part_c(depvar,df=census_data)
 
   # Specification 5:
   Y, _, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β_6 = jacknife_iv_estimation(Y, D, Z, nothing, nothing, true)
+  β_5 = jacknife_iv_estimation(Y, D, Z, nothing, nothing, true)
 
   # Specification 6:
   Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
@@ -307,11 +302,11 @@ census_data[:,:baseline_hhdens0] = census_data[:,:baseline_hhdens0]./10;
 census_data[:,:prop_indianwhite0] = census_data[:,:prop_indianwhite0]./10;
 census_data[:,:kms_to_road0] = census_data[:,:kms_to_road0]./10 ;
 census_data[:,:kms_to_town0] = census_data[:,:kms_to_town0]./10;
+controlVariables  = setVariableNames()
 
 # Part A: Replicate tables
 #--------------------------------
 
-controlVariables  = setVariableNames()
 t3_results = generateTable3(census_data, controlVariables)
 fem_t4_results = generateTable4(census_data, [:d_prop_emp_f], controlVariables)
 fem_t5_results = generateTable4(census_data, [:d_prop_emp_m], controlVariables)
@@ -330,4 +325,27 @@ fem_t5_results = generateTable4(census_data, [:d_prop_emp_m], controlVariables)
 #---------------------------------------
 
 results_female = solve_part_c([:d_prop_emp_f],census_data)
-results_male = solve_part_c(census_data,[:d_prop_emp_m])
+results_male = solve_part_c([:d_prop_emp_m], census_data)
+
+
+
+r = size(results_female[:model8],1)
+table_results = zeros(r,4)
+for ii in 1:4
+  model = Symbol("model", ii+4)
+  table_results[1:length(results_female[model]),ii] = results_female[model]
+end  
+CSV.write("jive_female_results.csv",  Tables.table(round.(table_results,sigdigits = 3)), writeheader=false)
+
+
+r = size(results_male[:model8],1)
+table_results = zeros(r,4)
+for ii in 1:4
+  model = Symbol("model", ii+4)
+  table_results[1:length(results_male[model]),ii] = results_male[model]
+end  
+CSV.write("jive_male_results.csv",  Tables.table(round.(table_results,sigdigits = 3)), writeheader=false)
+
+
+
+

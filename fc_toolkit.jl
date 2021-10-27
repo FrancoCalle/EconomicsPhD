@@ -1,18 +1,18 @@
 using Pkg
 
 #Install ...
-Pkg.activate(".") 
-Pkg.add("Distributions")
-Pkg.add("StatsBase")
-Pkg.add(["DataFrames","DataFramesMeta","Chain"])
-Pkg.add("Plots")
-Pkg.add("CategoricalArrays")
-Pkg.add("StatFiles")
-Pkg.add("Tables")
-Pkg.add("CSV")
-Pkg.add("Optim")
-Pkg.add("Missings")
-Pkg.instantiate()
+# Pkg.activate(".") 
+# Pkg.add("Distributions")
+# Pkg.add("StatsBase")
+# Pkg.add(["DataFrames","DataFramesMeta","Chain"])
+# Pkg.add("Plots")
+# Pkg.add("CategoricalArrays")
+# Pkg.add("StatFiles")
+# Pkg.add("Tables")
+# Pkg.add("CSV")
+# Pkg.add("Optim")
+# Pkg.add("Missings")
+# Pkg.instantiate()
 
 #Load packages ...
 
