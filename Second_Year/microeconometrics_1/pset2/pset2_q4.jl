@@ -312,6 +312,17 @@ fem_t4_results = generateTable4(census_data, [:d_prop_emp_f], controlVariables)
 male_t5_results = generateTable4(census_data, [:d_prop_emp_m], controlVariables)
 
 
+npanels = length(fem_t4_results)
+r = length(fem_t4_results[:panel_8].β)
+table_results = zeros(r,npanels)
+for ii in 1:8
+  model = Symbol("panel_", ii)
+  table_results[1:length(fem_t4_results[model].β),ii] = fem_t4_results[model].β
+end
+
+CSV.write("table4_female_results.csv",  Tables.table(round.(table_results,digits = 3)), writeheader=false)
+
+
 npanels = length(male_t5_results)
 r = length(male_t5_results[:panel_8].β)
 table_results = zeros(r,npanels)
@@ -321,6 +332,7 @@ for ii in 1:8
 end
 
 CSV.write("table4_male_results.csv",  Tables.table(round.(table_results,digits = 3)), writeheader=false)
+
 
 
 
