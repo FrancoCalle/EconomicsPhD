@@ -217,54 +217,82 @@ function anderson_rubin_test(df, depvar, controlVariables, min_β=-.3, max_β=0.
 end
 
 
+# y = Y
+# d = D
+# z = Z
 
-function jacknife_iv_estimation(Y, D, Z, X=nothing, fe=nothing, constant=nothing)
+function jacknife_iv_estimation(y, d, z, x=nothing, fixed_effects=nothing, intercept=true)
 
   # Make matrix for both first and second stage 
-  n = size(Y,1)
-
-  if ~isnothing(X)
-    Z = hcat(Z,X)
-    X = hcat(D,X)
+  n = size(y,1)
+        
+  if ~isnothing(x)
+      z = hcat(z,x)
+      d = hcat(d,x)
   end
 
-  if ~isnothing(fe)
-    constant = false
-    Z = hcat(Z,fe)
-    X = hcat(X,fe)
+  if ~isnothing(fixed_effects)
+      z = hcat(z,fixed_effects)
+      d = hcat(d,fixed_effects)
   end
 
-  if constant == true
-    X = hcat(X,ones(n,1))
-    Z = hcat(Z,ones(n,1))
+  if intercept == true
+      z = hcat(z,ones(n,1))
+      d = hcat(d,ones(n,1))
   end
 
-  k = size(X,2)
+  k = size(d,2)
 
   # Operations
-  ZᵀZ = Z' * Z
-  L_i = diag(Z * inv(ZᵀZ) * Z')
-  Π_hat = X' * Z * inv(ZᵀZ)
-  X_jive = (1 ./ (1 .- L_i)).*(Z * Π_hat' .- L_i .* X)
+  ZᵀZ = z' * z
+  L_i = diag(z * inv(ZᵀZ) * z')
+  Π_hat = d' * z * inv(ZᵀZ)
+  d_jive = (1 ./ (1 .- L_i)).*(z * Π_hat' .- L_i .* d)
 
   # Coefficient
-  X_jiveᵀX = X_jive' * X
-  X_jiveᵀY = X_jive' * Y
-  beta = inv(X_jiveᵀX) * X_jiveᵀY
+  d_jiveᵀd = d_jive' * d
+  d_jiveᵀY = d_jive' * y
+  beta = inv(d_jiveᵀd) * d_jiveᵀY
 
   # Get residuals
-  # res = Y - X * beta
+  # res = Y - d * beta
   # U2 = res * res'
-
-  # if varcov == "het"
-  #   Sigma = inv(X_jiveᵀX) * (X_jive' * diag(U2) * X_jive) * inv(X_jiveᵀX)' * n/(n-k)
-  # elseif varcov == "hom"  
-  #   Sigma = sum(U2)/(n-k) * inv(X_jiveᵀX) * (X_jive' * X_jive) * inv(X_jiveᵀX)'
-  # end
+  # Sigma = inv(d_jiveᵀd) * (d_jive' * diag(U2) * d_jive) * inv(d_jiveᵀd)' * n/(n-k)
+  # Sigma = sum(U2)/(n-k) * inv(d_jiveᵀd) * (d_jive' * d_jive) * inv(d_jiveᵀd)'
 
   return beta
 
 end
+
+
+function solve_part_c(depvar,df=census_data)
+
+  instrument = [:mean_grad_new]
+  treatment = [:T]
+  FixedEffects = Matrix(reduce(hcat, [df[:,:dccode0].== fe for fe in unique(df[:,:dccode0])]))
+  x_names = controlVariables[:controlVariableList]
+
+  # Specification 5:
+  Y, _, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
+  β_6 = jacknife_iv_estimation(Y, D, Z, nothing, nothing, true)
+
+  # Specification 6:
+  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
+  β_6 = jacknife_iv_estimation(Y, D, Z, X, nothing, true)
+
+  # Specification 7:
+  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
+  β_7 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
+
+  # Specification 8:
+  x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
+  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
+  β_8 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
+
+  return Dict(:model5 => β_5, :model6 => β_6, :model7 => β_7, :model8 => β_8)
+
+end
+
 
 # Small data clean and execute the code:
 #---------------------------------------
@@ -280,11 +308,16 @@ census_data[:,:prop_indianwhite0] = census_data[:,:prop_indianwhite0]./10;
 census_data[:,:kms_to_road0] = census_data[:,:kms_to_road0]./10 ;
 census_data[:,:kms_to_town0] = census_data[:,:kms_to_town0]./10;
 
+# Part A: Replicate tables
+#--------------------------------
+
 controlVariables  = setVariableNames()
 t3_results = generateTable3(census_data, controlVariables)
 fem_t4_results = generateTable4(census_data, [:d_prop_emp_f], controlVariables)
 fem_t5_results = generateTable4(census_data, [:d_prop_emp_m], controlVariables)
 
+# Part B: Anderson Rubin test finer grid
+#---------------------------------------
 
 # Dinkelman Grid: [-0.6: 0.05 : 1]
 β_set_dinkelman = anderson_rubin_test(census_data, [:d_prop_emp_f], controlVariables, -.6, 1, 0.05)
@@ -296,30 +329,5 @@ fem_t5_results = generateTable4(census_data, [:d_prop_emp_m], controlVariables)
 # Part C: Use Jacknife
 #---------------------------------------
 
-function solve_part_c(depvar)
-
-  instrument = [:mean_grad_new]
-  treatment = [:T]
-  FixedEffects = Matrix(reduce(hcat, [df[:,:dccode0].==fe for fe in unique(df[:,:dccode0])]))
-  x_names = controlVariables[:controlVariableList]
-
-  # Specification 6:
-  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β_6 = jacknife_iv_estimation(Y, D, Z, X, nothing, true)
-
-  # Specification 7:
-  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β_7 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
-
-  # Specification 8:
-  x_names = vcat(controlVariables[:controlVariableList],controlVariables[:additionalControls])
-  Y, X, D, Z  = select_variables(census_data, depvar, x_names, treatment, instrument)
-  β_8 = jacknife_iv_estimation(Y, D, Z, X, FixedEffects)
-
-  return Dict(:model6 => β_6, :model7 => β_7, :model8 => β_8)
-
-end
-
-
-results_female = solve_part_c([:d_prop_emp_f])
-results_male = solve_part_c([:d_prop_emp_m])
+results_female = solve_part_c([:d_prop_emp_f],census_data)
+results_male = solve_part_c(census_data,[:d_prop_emp_m])
