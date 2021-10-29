@@ -2,18 +2,18 @@ using Pkg
 
 #Install ...
 Pkg.activate(".") 
-Pkg.add("Distributions")
-Pkg.add("StatsBase")
-Pkg.add(["DataFrames","DataFramesMeta","Chain"])
-Pkg.add("Plots")
-Pkg.add("CategoricalArrays")
-Pkg.add("StatFiles")
-Pkg.add("Tables")
-Pkg.add("CSV")
-Pkg.add("Optim")
-Pkg.add("StatsPlots")
-Pkg.instantiate()
-Pkg.add("FixedEffectModels")
+# Pkg.add("Distributions")
+# Pkg.add("StatsBase")
+# Pkg.add(["DataFrames","DataFramesMeta","Chain"])
+# Pkg.add("Plots")
+# Pkg.add("CategoricalArrays")
+# Pkg.add("StatFiles")
+# Pkg.add("Tables")
+# Pkg.add("CSV")
+# Pkg.add("Optim")
+# Pkg.add("StatsPlots")
+# Pkg.instantiate()
+# Pkg.add("FixedEffectModels")
 
 #Load packages ...
 
@@ -39,7 +39,39 @@ include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 # IV usual limit approximation:
 #-------------------------------------
 
-function iv_mc_simulations(γ ,ρ_uv=0.99, n=1000, m=10000)
+function tsls_regression(y, d, z, x=nothing, fe=nothing, cl=nothing, intercept=true)
+
+    n = size(z)[1]
+    
+    if ~isnothing(x)
+        z = hcat(z,x)
+        d = hcat(d,x)
+    end
+
+    if ~isnothing(fe)
+        intercept = false
+        z = hcat(z,fe)
+        d = hcat(d,fe)
+    end
+
+    if intercept == true
+        z = hcat(z,ones(n,1))
+        d = hcat(d,ones(n,1))
+    end
+    
+    Q_Z, R_Z = qr(z)
+    
+    ZZ_inv = inv(cholesky(R_Z' * R_Z))
+    
+    P_Z = z * ZZ_inv * z'
+    
+    β = inv(d' * P_Z * d) * d' * P_Z * y
+        
+    return β
+end
+
+
+function iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
 
     μ_uv = [0, 0]
     σ_uv = Matrix{Float64}(I, 2, 2); σ_uv[1,2] = ρ_uv; σ_uv[2,1] = ρ_uv
@@ -48,9 +80,9 @@ function iv_mc_simulations(γ ,ρ_uv=0.99, n=1000, m=10000)
     for mm in 1:m
         uv = rand(MvNormal(μ_uv, σ_uv), n)'
         Z = rand(Normal(0,1),n)
-        D = γ * Z + uv[:,2]
+        D = γ .* Z .+ uv[:,2]
         Y = uv[:,1]
-        β, _ = tsls_regression(Y, D, Z, nothing, false)
+        β = tsls_regression(Y, D, Z, nothing, nothing, nothing, false)
         append!(ivresults, β)
     end
     
@@ -76,7 +108,7 @@ vline!([1],color=:gray, linestyle=:dash, label="",linewidth=2.5)
 # Weak instrument asymptotics:
 #-----------------------------
 
-num_simdraws = 100000
+num_simdraws = 10000
 
 function weak_iv_approx(γ_n, ρ_uv=0.99, num_simdraws = 100000, n = 1000)
 
@@ -113,10 +145,9 @@ density!(standard_approx(0.025), xlims = (-2.5,4.5), label="Standard Asymptotics
 #------------------------------------------------------------------------------------------------
 # Part D: Now multiple weak IV
 #------------------------------------------------------------------------------------------------
-include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
 
-function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=10000)
+function multiple_iv_mc_simulations(γ, ρ_uv=0.99, n=1000, m=5000)
     
     k = length(γ)
     μ_uv = [0, 0]
@@ -169,6 +200,7 @@ function multivariate_standard_approximation(γ_n, num_simdraws = 100000, n = 10
 end
 
 
+
 function multivariate_weak_iv_approximation(γ_n ,ρ_uv=0.99, n=1000, num_simdraws = 100000, chol=false)
 
     σ_v = 1
@@ -181,9 +213,8 @@ function multivariate_weak_iv_approximation(γ_n ,ρ_uv=0.99, n=1000, num_simdra
 
     Z = rand(MvNormal(zeros(k), Σ_z), n)'
     Q_zz = (Z' * Z/n)
-    
 
-    Σ = kron(σ_uv,Q_zz)
+    Σ = kron(σ_uv , Q_zz)
     μ = zeros(size(Σ)[1])
     Φ = MvNormal(μ,Σ)
     rrf_rfs = rand(Φ, num_simdraws)'
@@ -192,13 +223,12 @@ function multivariate_weak_iv_approximation(γ_n ,ρ_uv=0.99, n=1000, num_simdra
     rfs =  rrf_rfs[:,k+1:end]
 
     μ² = γ'*Q_zz * γ / σ_v
+
     if chol == true
-        U = Array(cholesky(Q_zz).U)
+        U = Array(cholesky(Q_zz).U) # Used cholesky decomposition...
         μ  = γ'*U / σ_v
-        # println("Used cholesky decomposition...")
     else
-        μ  = γ'*sqrt(Q_zz) / σ_v
-        # println("Used plain square mat...")
+        μ  = γ'*sqrt(Q_zz) / σ_v    # Used plain square mat...
     end
 
     approximation = (σ_u / σ_v) .* (μ*rrf')./(μ²./√k .+ μ*rfs')
@@ -230,17 +260,19 @@ savefig("Multivariate_IV_Approximation.pdf")
 # Part E: Search μ^2 for different biases and K. 
 #------------------------------------------------------------
 
+dₖ = 50
+
 function get_bias(δ, K=3, ρ=0.99)
     γ = ones(K,1).*δ;
-    approximation, μ² = multivariate_weak_iv_approximation(γ , ρ , 1000, 100000);
+    approximation, μ² = multivariate_weak_iv_approximation(γ , ρ , 1000, 10000);
     bias = mean(approximation)
     return [bias μ²[1]]
 end
 
-μ_grid = zeros(length(3:30), 4)
-grid_δ = 0.001:0.0002:0.25
+μ_grid = zeros(length(3:dₖ), 4)
+grid_δ = 0.001:0.001:0.25
 
-for K in 3:30
+for K in 3:dₖ
     println("Number of covariates: ", K)
     bias_list = get_bias.(grid_δ, K)
     bias_list = vcat(bias_list...)
@@ -260,17 +292,15 @@ CSV.write("q1E_table.csv",  Tables.table(μ_grid), writeheader=false)
 
 # Assume what stock and yogo said is true (TODO: derive the proof of it...)
 
-c_value = zeros(length(3:30), 4)
+c_value = zeros(length(3:dₖ), 4)
 
 for ii in 1:4
-    for K in 3:30
-        q = quantile(NoncentralChisq(K, μ_grid[K-2,ii].*K), .95)./K
+    for K in 3:dₖ
+        q = quantile(NoncentralChisq(K, μ_grid[K-2,ii])./sqrt(K), .95)
+        # q = quantile(NoncentralChisq(K, μ_grid[K-2,ii])./sqrt(K), .95)
         c_value[K-2, ii] = q
     end
 end
-
-CSV.write("c_value_table.csv",  Tables.table(c_value), writeheader=false)
-
 
 
 plot(c_value[:,1], label=".05 Bias")
@@ -288,10 +318,8 @@ plot!(μ_grid[:,4], label=".3 Bias")
 plot!(legend=:topleft)
 savefig("Eigenvalue_bias.pdf")
 
-#_--------------------------------------------------
 
-
-
+CSV.write("c_value_table.csv",  Tables.table(c_value), writeheader=false)
 
 
 
