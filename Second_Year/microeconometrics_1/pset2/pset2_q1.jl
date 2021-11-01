@@ -260,27 +260,17 @@ savefig("Multivariate_IV_Approximation.pdf")
 # Part E: Search μ^2 for different biases and K. 
 #------------------------------------------------------------
 
-dₖ = 50
+dₖ = 100
 
-function get_bias(δ, K=3, ρ=0.99)
-    γ = ones(K,1).*δ;
-    approximation, μ² = multivariate_weak_iv_approximation(γ , ρ , 1000, 10000);
-    bias = mean(approximation)
-    return [bias μ²[1]]
-end
-
+get_bias_simple(d_z, α) = d_z/α 
 μ_grid = zeros(length(3:dₖ), 4)
-grid_δ = 0.001:0.001:0.25
 
 for K in 3:dₖ
     println("Number of covariates: ", K)
-    bias_list = get_bias.(grid_δ, K)
-    bias_list = vcat(bias_list...)
-
-    μ_grid[K-2, 1] = bias_list[argmin(abs.(bias_list[:,1] .- 0.05)),2]
-    μ_grid[K-2, 2] = bias_list[argmin(abs.(bias_list[:,1] .- 0.1)),2]
-    μ_grid[K-2, 3] = bias_list[argmin(abs.(bias_list[:,1] .- 0.2)),2]
-    μ_grid[K-2, 4] = bias_list[argmin(abs.(bias_list[:,1] .- 0.3)),2]
+    μ_grid[K-2, 1] = get_bias_simple(K, 0.05)/10
+    μ_grid[K-2, 2] = get_bias_simple(K, 0.1)/10
+    μ_grid[K-2, 3] = get_bias_simple(K, 0.2)/10
+    μ_grid[K-2, 4] = get_bias_simple(K, 0.3)/10
 end
 
 CSV.write("q1E_table.csv",  Tables.table(μ_grid), writeheader=false)
@@ -297,7 +287,6 @@ c_value = zeros(length(3:dₖ), 4)
 for ii in 1:4
     for K in 3:dₖ
         q = quantile(NoncentralChisq(K, μ_grid[K-2,ii])./sqrt(K), .95)
-        # q = quantile(NoncentralChisq(K, μ_grid[K-2,ii])./sqrt(K), .95)
         c_value[K-2, ii] = q
     end
 end
