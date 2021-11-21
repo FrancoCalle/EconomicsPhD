@@ -13,6 +13,7 @@ Pkg.add("CSV")
 Pkg.add("Optim")
 Pkg.add("StatsPlots")
 Pkg.add("FixedEffectModels")
+Pkg.add("BenchmarkTools")
 
 Pkg.instantiate()
 
@@ -31,6 +32,7 @@ using StatsBase
 using CategoricalArrays
 using CSV
 using Base.Threads
+using BenchmarkTools
 
 include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
@@ -49,7 +51,7 @@ struct define_parameters
 end
 
 
-function data_generating_process(parameters)
+function data_generating_process(parameters,seed=MersenneTwister(1234))
 
     N = parameters.N
     T = parameters.T
@@ -70,7 +72,7 @@ function data_generating_process(parameters)
     Y1_it = Matrix{Float64}(undef, N, T+1)
     Y_it  = Matrix{Float64}(undef, N, T+1)
 
-    E_i[:,1] = round.(rand(Uniform(.5, 5.5),N))
+    E_i[:,1] = round.(rand(MersenneTwister(1234),Uniform(.5, 5.5),N))
 
     for ii = 1:N
         
@@ -84,9 +86,9 @@ function data_generating_process(parameters)
 
             treatment[ii,tt] =  TT[ii,tt]-E_i[ii,tt] >= 0
 
-            ϵ_it[ii,tt] = rand(Normal())
+            ϵ_it[ii,tt] = rand(seed,Normal())
 
-            V_it[ii,tt] = rand(Normal())
+            V_it[ii,tt] = rand(seed,Normal())
 
             U_it[ii,tt] = ρ * U_it[ii,tt-1] + ϵ_it[ii,tt]
 
@@ -95,9 +97,13 @@ function data_generating_process(parameters)
             Y1_it[ii,tt] = α + β * E_i[ii,tt] + sin(tt - θ * E_i[ii,tt]) + U_it[ii,tt] + V_it[ii,tt]
 
             if treatment[ii, tt] == 1
+
                 Y_it[ii,tt] = Y1_it[ii,tt]
+
             else
+
                 Y_it[ii,tt] = Y0_it[ii,tt]
+            
             end
 
         end
@@ -124,6 +130,8 @@ end
 # Part B: Fixed effects estimation ...
 function estimation(df)
     
+    N = Integer(maximum(df[:,:ID]))
+    T = Integer(maximum(df[:,:TT]))
     depvar = [:YY]
     CohortFixedEffects          = Matrix(reduce(hcat, [df[:,:EE] .== tt for tt in unique(df[:,:EE])]))
     TimeFixedEffects            = Matrix(reduce(hcat, [df[:,:TT] .== tt for tt in unique(df[:,:TT])]))
@@ -141,13 +149,17 @@ function estimation(df)
 end 
 
 
-function bootstrap(parameters, m = 12, α=0.025)
+function monte_carlo(parameters, m = 12, α=0.025)
     
-    relative_time_fe_list = Matrix(reduce(hcat,[estimation(data_generating_process(parameters)) for mm = 1:m]))'    
-    
-    p_low = [quantile(relative_time_fe_list[:,jj], α) for jj = 1:size(relative_time_fe_list,2)]
-    p_up = [quantile(relative_time_fe_list[:,jj], 1-α) for jj = 1:size(relative_time_fe_list,2)]
-    avg = mean.(eachcol(relative_time_fe_list))
+    parameters_placeholder = zeros(m,7)
+
+    for mm in 1:m
+        parameters_placeholder[mm,:] = estimation(data_generating_process(parameters)) 
+    end    
+
+    p_low = [quantile(parameters_placeholder[:,jj], α) for jj = 1:size(parameters_placeholder,2)]
+    p_up = [quantile(parameters_placeholder[:,jj], 1-α) for jj = 1:size(parameters_placeholder,2)]
+    avg = mean.(eachcol(parameters_placeholder))
 
     return avg, p_up, p_low
 
@@ -155,11 +167,42 @@ end
 
 
 
+
+function parallel_monte_carlo(parameters, m = 12, α=0.025)
+    
+    parameters_placeholder = zeros(m,7)
+    rnglist = [MersenneTwister() for i in 1:nthreads()]
+
+    @threads for mm in 1:m
+        parameters_placeholder[mm,:] = estimation(data_generating_process(parameters, rnglist[threadid()])) 
+    end    
+
+    p_low = [quantile(parameters_placeholder[:,jj], α)   for jj = 1:size(parameters_placeholder,2)]
+    p_up  = [quantile(parameters_placeholder[:,jj], 1-α) for jj = 1:size(parameters_placeholder,2)]
+    avg = mean.(eachcol(parameters_placeholder))
+
+    return avg, p_up, p_low
+
+end
+
+
+
+
 true_parameters = define_parameters(10000, 5, -0.2, 0.5, -2, 0.5)
 df = data_generating_process(true_parameters)
 
-nthreads()
-avg, p_up, p_low = bootstrap(true_parameters, 5000)
+println("Number of threads active: " , string(nthreads()))
 
+
+
+avg, p_up, p_low = parallel_monte_carlo(true_parameters,  10000, 0.025)
+
+
+
+@btime avg, p_up, p_low = monte_carlo(true_parameters,  2000, 0.05);
+@btime avg, p_up, p_low = parallel_monte_carlo(true_parameters,  1000, 0.05);
+
+
+avg, p_up, p_low = parallel_monte_carlo(true_parameters,  500, 0.05);
 
 
