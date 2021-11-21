@@ -261,6 +261,7 @@ for ii in 1:3
 end
 
 plot(ate_true, ate, markershape = :square, label=["Coefficients"], c=:blue)
+plot!(legend=:topleft)
 savefig("ATE_estimation.pdf")
 
 
