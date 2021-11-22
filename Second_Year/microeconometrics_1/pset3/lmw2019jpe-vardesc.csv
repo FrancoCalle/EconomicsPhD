@@ -1,0 +1,53 @@
+position,name,type,isnumeric,format,vallab,varlab
+1,age_resp,float,1,%9.0g,,Respondent age
+2,asset_value,float,1,%9.0g,,"Asset value (livestock, appliances, other) (KSH) (top-coded) (converted to USD)"
+3,bank,float,1,%9.0g,,Respondent has bank account (=1)
+4,base_age,float,1,%9.0g,,Respondent age in 2014 (=1)
+5,busia,byte,1,%10.0g,,Busia county (=1)
+6,child,byte,1,%9.0g,,Child (=1)
+7,child_age,float,1,%9.0g,,Age of student in 2017
+8,child_female,float,1,%9.0g,,Student is female (=1)
+9,connected,float,1,%9.0g,,A1. Grid connected
+10,connected_r,float,1,%9.0g,,Estimated community connection rate at R1
+11,connected_rate,float,1,%9.0g,,Community electrification rate (compounds)
+12,educ,float,1,%9.0g,,Respondent completed secondary school (=1)
+13,electric_lighting,float,1,%9.0g,,B1. Electricity as main lighting source
+14,emi,float,1,%9.0g,,E1. Economic Index (C1 to C5 outcomes)
+15,energy_spending,float,1,%9.0g,,B8. Monthly total energy spending (KSH) (converted to USD)
+16,energyspending,float,1,%9.0g,,Monthly energy spending (KSH) (converted to USD)
+17,female,float,1,%9.0g,,Respondent is female (=1)
+18,fraction_employed_all,float,1,%9.0g,,C1. Household employed or own business
+19,gridelec_spending,float,1,%9.0g,,A2. Monthly electricity spending (KSH) (converted to USD)
+20,hhid,float,1,%8.0g,,Household ID
+21,hours_worked,float,1,%9.0g,,C3. Total hours worked last week
+22,housing,float,1,%9.0g,,Housing quality index
+23,iron,float,1,%9.0g,,B6. Owns iron
+24,kerosene_spending,float,1,%9.0g,,B7. Monthly kerosene spending (KSH) (converted to USD)
+25,knowledge_index,float,1,%9.0g,,D5. Political and social awareness index
+26,life_index,float,1,%8.0g,,D2. Normalized life satisfaction
+27,market,float,1,%10.0g,marketlab,Market community (=1)
+28,metered,float,1,%d,,Metering date
+29,mobilephone,float,1,%9.0g,,B3. Owns mobile phone
+30,moved,float,1,%9.0g,,Household moved to different location
+31,nemi,float,1,%9.0g,,E2. Non-Economic Index (D1 to D6 outcomes)
+32,number_appliances,float,1,%9.0g,,B2. Number of appliance types owned
+33,percapcons,float,1,%9.0g,,C5. Per capita consumption of major items (KSH) (converted to USD)
+34,population,float,1,%9.0g,,Community population
+35,r_crime_index,float,1,%9.0g,,D6. Perceptions of security index
+36,radio,float,1,%9.0g,,B4. Owns radio
+37,reppid,str10,0,%10s,,Key
+38,round2,float,1,%9.0g,,Round 2 (=1)
+39,sibs,float,1,%9.0g,,Number of children under 18 in the household
+40,siteno,float,1,%8.0g,,Community ID
+41,solar_shs,float,1,%9.0g,,B9. Solar home system as main lighting source
+42,st_score_kcpe,float,1,%9.0g,,D4. Avg. student KCPE test Z-score
+43,st_studenttest,float,1,%9.0g,,D3. Avg. student test Z-score
+44,survey,float,1,%d,,Survey date
+45,symptoms_index,float,1,%9.0g,,D1. Recent health symptoms index
+46,television,float,1,%9.0g,,B5. Owns television
+47,tot_hh_month_earn,float,1,%9.0g,,C2. Per capita monthly household earnings (KSH) (converted to USD)
+48,transearly,float,1,%9.0g,,Transformer funded early (=1)
+49,treat_full,float,1,%9.0g,,Treatment arm #3 (0) = 3
+50,treat_low,float,1,%9.0g,,Treatment arm #1 (25k) = 1
+51,treat_med,float,1,%9.0g,,Treatment arm #2 (15k) = 2
+52,treated_all,float,1,%9.0g,,Any treatment = 1
