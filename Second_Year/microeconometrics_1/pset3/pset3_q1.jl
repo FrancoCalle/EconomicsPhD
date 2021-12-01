@@ -52,6 +52,8 @@ function define_variables()
                 :cluster => cluster)
 end
 
+df = load_dataset()
+
 model_variables = define_variables()
 
 # Part A: Replicate cols (1) and (3) rows C3 and D2 of table 3 
@@ -68,33 +70,93 @@ x_vars = []
 x_vars = append!(x_vars, [itt_treatment])
 x_vars = append!(x_vars, covariates)
 
-# Replicate C3: Total Hours Worked 
-println("Total hours worked")
-depvar = [model_variables[:depvar_c3]]
 
-println("ITT:")
-Y, X, _, _  = select_variables(df, depvar, x_vars, nothing,nothing)
-ols1 = olsRegression(Y,X)
-ols1.β
+function compute_results_part_a()
+    
+    # Replicate C3: Total Hours Worked :
+    #-----------------------------------
+    println("Total hours worked")
+    depvar = [model_variables[:depvar_c3]]
 
-println("TOT:")
-Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
-tsls1 = tsls_regression(Y, D, Z)
-tsls1.β
-
-# Replicate D2 TOT: Total Hours Worked 
-depvar = [model_variables[:depvar_d2]]
-Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
-tsls1 = tsls_regression(Y, D, Z)
-tsls1.β
+    println("ITT:")
+    Y, X, _, CL= select_variables(df, depvar, x_vars, nothing, model_variables[:cluster])
+    CL = CategoricalArray(CL)
+    ols1 = olsRegression(Y,X, nothing, CL[:])
+    ols1 = inference(ols1)
+    ols1.se
+    ols1.β
 
 
+    println("TOT:")
+    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    tsls1 = tsls_regression(Y, D, Z, X)
+    tsls1.β
 
+    # Replicate D2 TOT: Life Satisfaction:
+    #-------------------------------------
+    println("Life Satisfaction")
+    depvar = [model_variables[:depvar_d2]]
 
+    println("ITT:")
+    Y, X, _, CL= select_variables(df, depvar, x_vars, nothing, model_variables[:cluster])
+    CL = CategoricalArray(CL)
+    ols1 = olsRegression(Y,X, nothing, CL[:])
+    ols1.β
+    inference(ols1)
+
+    println("TOT:")
+    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    tsls1 = tsls_regression(Y, D, Z, X)
+    tsls1.β
+    
+end
 
 
 
 # Part D: Show that results in (a) do not change much by not controlling for covariates
+function compute_results_part_d()
+    
+    # Replicate C3 TOT: Life Satisfaction:
+    #-------------------------------------
+    println("Total hours worked")
+    depvar = [model_variables[:depvar_c3]]
+
+    println("ITT:")
+    Y, X, _, CL= select_variables(df, depvar, [itt_treatment], nothing, model_variables[:cluster])
+    CL = CategoricalArray(CL)
+    ols1 = olsRegression(Y,X, nothing, CL[:])
+    ols1 = inference(ols1)
+    ols1.β
+    ols1.se
+
+
+    println("TOT:")
+    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    tsls1 = tsls_regression(Y, D, Z)
+    tsls1.β
+
+    # Replicate D2 TOT: Life Satisfaction:
+    #-------------------------------------
+    println("Life Satisfaction")
+    depvar = [model_variables[:depvar_d2]]
+
+    println("ITT:")
+    Y, X, _, CL= select_variables(df, depvar, [itt_treatment], nothing, model_variables[:cluster])
+    CL = CategoricalArray(CL)
+    ols1 = olsRegression(Y,X, nothing, CL[:])
+    ols1.β
+    inference(ols1)
+
+    println("TOT:")
+    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    tsls1 = tsls_regression(Y, D, Z)
+    tsls1.β
+ 
+end
+
+
+
+
 
 # Part E: Estimate ATE, ATU, and ATT using MTE.
 # - Restrict attention to parametric specifications of MTR
