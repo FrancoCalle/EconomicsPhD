@@ -48,7 +48,7 @@ struct olsRegression
     cl::Array # clusters
 
     # Define constructor function
-    function olsRegression(y, x, fe = nothing, cl = nothing)
+    function olsRegression(y, x, fe = nothing, cl = nothing, constant = true)
         """
         Inputs: 
         Y: An array of N × 1 dimension (outputs).
@@ -56,9 +56,11 @@ struct olsRegression
         cl: An array of N × missing dimension (clusters)
         """
         
-        if isnothing(fe)
+        if isnothing(fe) & constant==true
             x = hcat(x,ones(size(x)[1],1))
-        else
+        elseif isnothing(fe) & constant==false
+            x = x
+        elseif ~isnothing(fe)
             x = hcat(x, fe)
         end
 
@@ -187,7 +189,7 @@ struct tsls_regression
 end
 
 
-function predict(fit::olsRegression, data = nothing)
+function predict_outcome(fit::olsRegression, data = nothing)
     
     isnothing(data) ? fitted = fit.x * fit.β : fitted = data * fit.β
 
@@ -196,7 +198,7 @@ function predict(fit::olsRegression, data = nothing)
 end
 
 
-function predict(fit::tsls_regression, data = nothing)
+function predict_outcome(fit::tsls_regression, data = nothing)
     
     isnothing(data) ? fitted = fit.d * fit.β : fitted = data * fit.β
 
@@ -204,7 +206,7 @@ function predict(fit::tsls_regression, data = nothing)
 
 end
 
-function predict(fit::probitModel, data = nothing)
+function predict_outcome(fit::probitModel, data = nothing)
     
     isnothing(data) ? fitted = cdf.(Normal(fit.μ, fit.σ),fit.x * fit.θ) : fitted = cdf.(Normal(fit.μ, fit.σ), data * fit.θ)
 
@@ -255,7 +257,7 @@ function propensityScoreMatching(x, y, d, k)
 
     probit = probitModel(x,d)
     
-    pscore = predict(probit)
+    pscore = predict_outcome(probit)
     
     y_1 = y[vec(d .== 1)]
     
@@ -298,7 +300,7 @@ function se_cluster(fit::olsRegression)
     n = size(y, 1); 
     k = size(x, 2);
 
-    res = y - predict(fit)
+    res = y - predict_outcome(fit)
     xᵀx = x'*x
 
     clusters = unique(cl)
@@ -355,7 +357,7 @@ function inference(fit::olsRegression)
 
     # Calculate the covariance under homoskedasticity
     # if se_option = 'homoskedacity'
-    u = y - predict(fit) # residuals
+    u = y - predict_outcome(fit) # residuals
     # xᵀx = inv(x' * x)
     # covar = sum(u.^2) * xᵀx
     # covar = covar .* (1 / (N - K)) # dof adjustment
