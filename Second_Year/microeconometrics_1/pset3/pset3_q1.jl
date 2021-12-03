@@ -229,6 +229,7 @@ function unpack_parameters(parameters, nCovs)
 end
 
 
+covariates = [:constant]
 
 function get_marginal_response(depvar, covariates, K, h_lo, h_up)
 
@@ -290,15 +291,21 @@ function get_marginal_response(depvar, covariates, K, h_lo, h_up)
 end
 
 
-function get_average_treatmet(mte, D)
+function get_average_treatmet(mte, D, propensity)
 
-    ATE = mean(mte)
+    ω_ate = 1
+    
+    ω_att = (1 .- propensity)./mean(D)
 
-    ATU = mean(mte[D[:] .== 0])
+    ω_atu = propensity./(1 - mean(D))
 
-    ATT = mean(mte[D[:] .== 1])
+    ATE = mean(mte.*ω_ate)
 
-    return ATE, ATU, ATT
+    ATT = mean(mte.*ω_att)
+
+    ATU = mean(mte.*ω_atu)
+
+    return ATE, ATT, ATU
 
 end
 
@@ -311,30 +318,31 @@ end
 # First check common support...
 
 # With covariates:
-K = 2
+K = 3
 depvar = model_variables[:depvar_c3]
 covariate_names = vcat(covariates, [:constant])
 mte, mteall, πSet, allSet = get_marginal_response(depvar, covariate_names, K, 0.01, 0.5)
-ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D])
-ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D])
+ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+
 
 histogram(allSet[:propensity][allSet[:D][:].==1],  bins =20 , fillalpha=0.2)
 histogram!(allSet[:propensity][allSet[:D][:].==0], bins =20 ,fillalpha=0.2)
 
+
 scatter(allSet[:propensity],mteall,fillalpha=0.2)
 scatter!(πSet[:propensity],mte,fillalpha=0.2)
-
 scatter(πSet[:propensity],mte,fillalpha=0.2)
 
+
 # No covariates:
+
 K = 2
 depvar = model_variables[:depvar_c3]
 covariate_names = [:constant]
-mte, mteall, πSet, allSet  = get_marginal_response(depvar, covariate_names, K, 0.1, 0.5)
-ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D])
-ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D])
-
-
+mte, mteall, πSet, allSet  = get_marginal_response(depvar, covariate_names, K, 0.1, 0.25)
+ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
+ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
 
 histogram(allSet[:propensity][allSet[:D][:].==1], fillalpha=0.2)
 histogram!(allSet[:propensity][allSet[:D][:].==0],fillalpha=0.2)
