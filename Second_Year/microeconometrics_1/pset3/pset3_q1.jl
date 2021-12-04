@@ -24,6 +24,12 @@ include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 function load_dataset()
 
     df = DataFrame(CSV.File("lmw2019jpe-clean.csv"))
+
+    df[:, :effective_connection_price] .= 398
+    df[df.treat_full.==1, :effective_connection_price] .= 0
+    df[df.treat_med.==1, :effective_connection_price] .= 171
+    df[df.treat_low.==1, :effective_connection_price] .= 284
+    
     df[:,:constant] .= 1
 
     return df 
@@ -175,7 +181,7 @@ end
 
 # This one uses a probit built in function, planning to change it later: 
 
-function get_propensity_score(covs)
+function get_propensity_score(df,covs)
 
     if length(covs) > 1
         reg = @formula(connected ~ treat_full + treat_low + treat_med + female + base_age + educ + bank + housing + asset_value + energyspending + busia + market + transearly + connected_rate + population)
@@ -192,13 +198,15 @@ function get_propensity_score(covs)
 end
 
 
-function marginalEffect(β10, α, XPr, polinomialApproximation, propensity)
-    
+function marginalEffect(β10, α, XX, polinomialApproximation, propensity)
+
+    #  Derivative is: ∂E[Y | X=x, P(Z) = p]/∂p = X(β1 - β0) + ∂ K(p) / ∂ p
+
     C = Array(2:K)
 
     dkdp = C'.*(polinomialApproximation./propensity)
     
-    mte = XPr*β10 .+ dkdp*α
+    mte = XX*β10 .+ dkdp*α
 
     return mte
 
@@ -229,11 +237,10 @@ function unpack_parameters(parameters, nCovs)
 end
 
 
-covariates = [:constant]
 
-function get_marginal_response(depvar, covariates, K, h_lo, h_up)
+function get_marginal_response(df, depvar, covariates, K, h_lo, h_up)
 
-    propensity = get_propensity_score(covariates)
+    propensity = get_propensity_score(df, covariates)
 
     polinomialApproximation = polinomial_approximation(K, propensity)
     
@@ -271,9 +278,9 @@ function get_marginal_response(depvar, covariates, K, h_lo, h_up)
 
     _, β10, α = unpack_parameters(ols1.β, size(XX,2))
 
-    mte = marginalEffect(β10, α, XPrπ, polinomialApproximationπ, propensityπ)
+    mte = marginalEffect(β10, α, XXπ, polinomialApproximationπ, propensityπ)
 
-    mteAll = marginalEffect(β10, α, XPr, polinomialApproximation, propensity)
+    mteAll = marginalEffect(β10, α, XX, polinomialApproximation, propensity)
 
     # Pack stuff...
     πSet = Dict(:propensity => propensityπ, 
@@ -310,6 +317,30 @@ function get_average_treatmet(mte, D, propensity)
 end
 
 
+
+function bootstrap_se_model(df, depvar, covariate_names, support)
+    
+    ATE_list = []; ATU_list = []; ATT_list = []
+    for b in 1:1000
+        index_b = rand(1:size(df,1),4000)
+        df_b = df[index_b,:]
+        try
+            mte, mteall, πSet, allSet  = get_marginal_response(df_b, depvar, covariate_names, K, support[1], support[2])
+            ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+            append!(ATE_list, ATE)
+            append!(ATU_list, ATU)
+            append!(ATT_list, ATT)            
+        catch
+            println("Bootstrap error")
+        end
+    end
+
+    ate_se = std(ATE_list); atu_se = std(ATU_list); att_se = std(ATT_list)
+    
+    return ate_se, atu_se, att_se
+
+end
+
 # Part E: Estimate ATE, ATU, and ATT using MTE.
 # - Restrict attention to parametric specifications of MTR
 # - 1st estimating the treatment selection equation in (2) as a probit model to obtain estimates of the propensity score
@@ -317,13 +348,48 @@ end
 
 # First check common support...
 
-# With covariates:
-K = 3
+# E) No covariates:
+
+K = 2
+covariate_names = [:constant]
+support  = (0.01, 1)
+
+# Hours worked
 depvar = model_variables[:depvar_c3]
-covariate_names = vcat(covariates, [:constant])
-mte, mteall, πSet, allSet = get_marginal_response(depvar, covariate_names, K, 0.01, 0.5)
-ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+mte, mteall, πSet, allSet  = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) # ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
 ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+# Get Bootstrapped Standard Errors:
+ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
+
+
+# Life Satisfaction
+depvar = model_variables[:depvar_d2]
+mte, mteall, πSet, allSet  = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) # ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
+ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+# Get Bootstrapped Standard Errors:
+ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
+
+
+# histogram(allSet[:propensity][allSet[:D][:].==1], fillalpha=0.2)
+# histogram!(allSet[:propensity][allSet[:D][:].==0],fillalpha=0.2)
+
+
+# F) With covariates:
+K = 2
+covariate_names = vcat(covariates, [:constant])
+support  = (0.01, 1)
+
+# Hours worked
+depvar = model_variables[:depvar_c3]
+mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
+
+# Life Satisfaction
+depvar = model_variables[:depvar_d2]
+mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
 
 
 histogram(allSet[:propensity][allSet[:D][:].==1],  bins =20 , fillalpha=0.2)
@@ -331,27 +397,33 @@ histogram!(allSet[:propensity][allSet[:D][:].==0], bins =20 ,fillalpha=0.2)
 
 
 scatter(allSet[:propensity],mteall,fillalpha=0.2)
-scatter!(πSet[:propensity],mte,fillalpha=0.2)
-scatter(πSet[:propensity],mte,fillalpha=0.2)
 
 
-# No covariates:
+
+# G) Now consider policy where effective connection price is changed to $200
+# - Construct estimate of per person policy relevant treatment relative to status quo
+# - use two outcomes in (a) and parametric, point identified specifications of mtr as in e.
+
+# Small tweak, instead of dichotomous variables I'll transform it in effective connection price:
+# - MTE will remain the same, we will just change propensity score and compute PRTE
 
 K = 2
+covariate_names = vcat(covariates, [:constant])
+support  = (0.01, 1)
+
+# Hours worked
 depvar = model_variables[:depvar_c3]
-covariate_names = [:constant]
-mte, mteall, πSet, allSet  = get_marginal_response(depvar, covariate_names, K, 0.1, 0.25)
-ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
-ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
 
-histogram(allSet[:propensity][allSet[:D][:].==1], fillalpha=0.2)
-histogram!(allSet[:propensity][allSet[:D][:].==0],fillalpha=0.2)
+# Life Satisfaction
+depvar = model_variables[:depvar_d2]
+mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
 
-
-# And derivative is: ∂E[Y | X=x, P(Z) = p]/∂p = X(β1 - β0) + ∂ K(p) / ∂ p
-
-# histogram(predict(probit))
-
+reg = @formula(connected ~ effective_connection_price)
+probit = glm(reg, df, Binomial(), ProbitLink())
+df_new = df
+df_new[:,:effective_connection_price] .= 200
+propensity = predict(probit,df)
 
 
 
