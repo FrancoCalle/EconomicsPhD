@@ -317,7 +317,6 @@ function get_average_treatmet(mte, D, propensity)
 end
 
 
-
 function bootstrap_se_model(df, depvar, covariate_names, support)
     
     ATE_list = []; ATU_list = []; ATT_list = []
@@ -335,7 +334,9 @@ function bootstrap_se_model(df, depvar, covariate_names, support)
         end
     end
 
-    ate_se = std(ATE_list); atu_se = std(ATU_list); att_se = std(ATT_list)
+    ate_se = std(ATE_list)/sqrt(length(ATE_list)); 
+    atu_se = std(ATU_list)/sqrt(length(ATE_list)); 
+    att_se = std(ATT_list)/sqrt(length(ATE_list))
     
     return ate_se, atu_se, att_se
 
@@ -407,45 +408,79 @@ scatter(allSet[:propensity],mteall,fillalpha=0.2)
 # Small tweak, instead of dichotomous variables I'll transform it in effective connection price:
 # - MTE will remain the same, we will just change propensity score and compute PRTE
 
-K = 2
-covariate_names = vcat(covariates, [:constant])
-support  = (0.01, 1)
+function compute_prte(df, depvar, covariate_names, effective_cost)
+    
+    K = 2
 
-# Hours worked
+    support  = (0.01, 1)
+
+    _, mteall, _, _ = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+
+    probit = glm(@formula(connected ~ effective_connection_price), df, Binomial(), ProbitLink())
+
+    propensity_0 = predict(probit,df)
+
+    df_new = df; df_new[:,:effective_connection_price] .= effective_cost
+
+    propensity_1 = predict(probit,df_new)
+
+    # Compute mte on identified segment:
+
+    PRTE = mean(mteall.*(propensity_0.-propensity_1)./(mean(propensity_1)-mean(propensity_0)))
+
+    return PRTE
+
+end
+
+
+function bootstrap_prte(df, depvar, covariate_names, effective_cost)
+    
+    PRTE_list = [];
+    for b in 1:1000
+        index_b = rand(1:size(df,1),4000)
+        df_b = df[index_b,:]
+        try
+            PRTE = compute_prte(df_b, depvar, covariate_names, effective_cost)
+            append!(PRTE_list, PRTE)            
+        catch
+            println("Bootstrap error")
+        end
+    end
+
+    prte_se = std(PRTE_list)/sqrt(length(PRTE_list)) 
+
+    return prte_se
+
+end
+
+
+
+# Hours Work
+covariate_names = [:constant]
 depvar = model_variables[:depvar_c3]
-mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
+PRTE = compute_prte(load_dataset(), depvar, covariate_names, 200)
+PRTE_se = bootstrap_prte(load_dataset(), depvar, covariate_names, 200)
 
 # Life Satisfaction
+covariate_names = [:constant]
 depvar = model_variables[:depvar_d2]
-mte, mteall, πSet, allSet = get_marginal_response(df, depvar, covariate_names, K, support[1],support[2]) #ATE, ATU, ATT = get_average_treatmet(mte, πSet[:D], πSet[:propensity])
-
-reg = @formula(connected ~ effective_connection_price)
-probit = glm(reg, df, Binomial(), ProbitLink())
-df_new = df
-df_new[:,:effective_connection_price] .= 200
-propensity = predict(probit,df)
+PRTE = compute_prte(load_dataset(), depvar, covariate_names, 200)
+PRTE_se = bootstrap_prte(load_dataset(), depvar, covariate_names, 200)
 
 
-
-# - Use bootstrap to produce SE.
-
-# - Examine sensitivity of results to parametrization of MTR
-
-# Part F: Repeat E while controlling for the same set of cocvs as in A.
-
-# Part G: Consider policy where effective connection price is changed to 200 USD for all.
-# - Construct estimate of per-person policy-relevant treatment effect of new policy
-# - Use bootstrap to produce SE or CI.
 
 # Part H: Pick prior lower and upper bounds for the two outcomes in A and  discuss choices.
 # - Compute nonparametric bounds on the ATU that use all info in E[Y_i | D_i, Z_i].
 
-# Parametrize MTR function using Bernstein polynomials, omiting covariates and recompute bounds. 
 
 
 
 
 
+
+# Part I: Parameterize the MTR function using the Bernstein polynomials, omiting
+# covariates, and re-compute bounds on the ATU using the same prior
+# outcome bounds as in (h).
 
 
 
