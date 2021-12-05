@@ -45,6 +45,7 @@ struct olsRegression
     β::Array{Float64} # coefficient
     x::Array{Float64} # features
     y::Array{Float64} # response
+    flag_cl::Bool # clusters
     cl::Array # clusters
 
     # Define constructor function
@@ -56,11 +57,13 @@ struct olsRegression
         cl: An array of N × missing dimension (clusters)
         """
         
-        if isnothing(fe) & constant==true
-            x = hcat(x,ones(size(x)[1],1))
-        elseif isnothing(fe) & constant==false
-            x = x
-        elseif ~isnothing(fe)
+        if isnothing(fe)
+            if constant == true
+                x = hcat(x,ones(size(x)[1],1))
+            else
+                x = x
+            end
+        else
             x = hcat(x, fe)
         end
 
@@ -68,7 +71,7 @@ struct olsRegression
         xᵀy = transpose(x)*y
         β = inv(xᵀx)*xᵀy #compute parameters
 
-        isnothing(cl) ? new(β, x, y, [NaN]) : new(β, x, y, cl)
+        isnothing(cl) ? new(β, x, y, false, [cl]) : new(β, x, y, true, cl)
     
     end
 
@@ -338,9 +341,32 @@ function se_cluster(fit::olsRegression)
 
     vcov_matrix = mat_posdef_fix(varcov)
     
-    se_cluster = sqrt.(diag(varcov))
+    se = sqrt.(diag(varcov))
 
-    return se_cluster
+    return se
+
+end
+
+
+function se_homoskedastic(fit::olsRegression)
+
+    x = fit.x; y = fit.y; β = fit.β
+    
+    N = length(y); K = size(x, 2);
+
+    u = y - predict_outcome(fit) # residuals
+
+    XX_inv = inv(x' * x)
+
+    covar = sum(u.^2) * XX_inv
+
+    covar = covar .* (1 / (N - K)) # dof adjustment
+
+    # Get standard errors, t-statistics, and p-values
+
+    se = sqrt.(covar[diagind(covar)])
+
+    return se
 
 end
 
@@ -355,16 +381,19 @@ function inference(fit::olsRegression)
     N = length(y); 
     K = size(x, 2);
 
-    # Calculate the covariance under homoskedasticity
-    # if se_option = 'homoskedacity'
     u = y - predict_outcome(fit) # residuals
-    # xᵀx = inv(x' * x)
-    # covar = sum(u.^2) * xᵀx
-    # covar = covar .* (1 / (N - K)) # dof adjustment
+
+    # Calculate the covariance under homoskedasticity
+    if fit.flag_cl == true  # If cluster is passed on struct
+        # println("Errors: Clustered")
+        se = se_cluster(fit)
+    else # If cluster is not pased on struct
+        # println("Errors: Homoskedastic")
+        se = se_homoskedastic(fit)
+    end
 
     #Get standard errors, t-statistics, and p-values
     # se = sqrt.(covar[diagind(covar)])
-    se = se_cluster(fit)
     t_stat = β ./ se
     p_val = 2 .* cdf.(TDist(N-K), - abs.(t_stat))
     r2 = 1 - sum(u.^2)/sum((y.-mean(y)).^2)

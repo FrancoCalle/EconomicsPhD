@@ -50,7 +50,6 @@ struct define_parameters
 
 end
 
-
 function data_generating_process(parameters,seed=MersenneTwister(1234))
 
     N = parameters.N
@@ -111,15 +110,15 @@ function data_generating_process(parameters,seed=MersenneTwister(1234))
         
     end
 
-    df = DataFrame( ID  =ID_i[:,2:T+1][:],
-                    TT  =TT[:,2:T+1][:], 
-                    EE  =E_i[:,2:T+1][:], 
-                    ϵ   =ϵ_it[:,2:T+1][:], 
-                    V   =V_it[:,2:T+1][:], 
-                    U   =U_it[:,2:T+1][:], 
-                    YY0 =Y0_it[:,2:T+1][:], 
-                    YY1 =Y1_it[:,2:T+1][:],
-                    YY  =Y_it[:,2:T+1][:],
+    df = DataFrame( ID  = ID_i[:,2:T+1][:],
+                    TT  = TT[:,2:T+1][:], 
+                    EE  = E_i[:,2:T+1][:], 
+                    ϵ   = ϵ_it[:,2:T+1][:], 
+                    V   = V_it[:,2:T+1][:], 
+                    U   = U_it[:,2:T+1][:], 
+                    YY0 = Y0_it[:,2:T+1][:], 
+                    YY1 = Y1_it[:,2:T+1][:],
+                    YY  = Y_it[:,2:T+1][:],
                     Treatment  = treatment[:,2:T+1][:],
                     D   = (TT.-E_i)[:,2:T+1][:]
                     );
@@ -129,7 +128,7 @@ end
 
 
 # Part B: Fixed effects estimation ...
-function estimation(df)
+function estimation(df, cl=false)
     
     N = Integer(maximum(df[:,:ID]))
     T = Integer(maximum(df[:,:TT]))
@@ -140,11 +139,20 @@ function estimation(df)
                                                 CohortFixedEffects[:,2:end], 
                                                 TimeFixedEffects[:,2:end]]))
     Y = Array(df[:,:YY])
-    ols1 = olsRegression(Y, ones(N*T,1), AllFixedEffects)
-    
-    return ols1.β
+
+    if cl
+        cluster = CategoricalArray(df[:, :ID])
+        ols = olsRegression(Y, ones(N*T,1), AllFixedEffects, cluster)
+    else
+        ols = olsRegression(Y, ones(N*T,1), AllFixedEffects)
+    end
+
+    results = inference(ols)
+
+    return results.β, results.se, results.t, results.p, ols
 
 end 
+
 
 
 function monte_carlo(parameters, m = 12, α=0.025)
@@ -152,17 +160,18 @@ function monte_carlo(parameters, m = 12, α=0.025)
     parameters_placeholder = zeros(m,14)
 
     for mm in 1:m
-        parameters_placeholder[mm,:] = estimation(data_generating_process(parameters,MersenneTwister())) 
+        parameters_placeholder[mm,:],_ = estimation(data_generating_process(parameters,MersenneTwister())) 
     end    
 
     p_lower = [quantile(parameters_placeholder[:,jj], α)   for jj in 1:size(parameters_placeholder,2)]
+    
     p_upper  = [quantile(parameters_placeholder[:,jj], 1-α) for jj in 1:size(parameters_placeholder,2)]
+    
     avg = mean.(eachcol(parameters_placeholder))
 
     return avg, p_upper, p_lower
 
 end
-
 
 
 function average_treatment_effect(df)
@@ -187,7 +196,9 @@ function monte_carlo_ate(parameters, m = 12, α=0.025)
     end    
 
     p_lower = quantile(parameters_placeholder, α)
+    
     p_upper  = quantile(parameters_placeholder, 1-α) 
+    
     avg = mean(parameters_placeholder)
 
     return avg, p_upper, p_lower
@@ -195,12 +206,33 @@ function monte_carlo_ate(parameters, m = 12, α=0.025)
 end
 
 
+function monte_carlo_power_test(parameters, cl = false , m = 12, α=0.05)
+    
+    parameters_placeholder = zeros(m,14)
 
-df = data_generating_process(true_parameters)
+    pval_placeholder = zeros(m,14)
+
+    for mm in 1:m
+        parameters_placeholder[mm,:],
+        _,
+        _,
+        pval_placeholder[mm,:],
+        _ = estimation(data_generating_process(parameters,MersenneTwister()), cl) 
+    end    
+
+    # Apply test for all draw results:
+    power = mean(pval_placeholder[:,5] .<α)
+
+    return power
+
+end
 
 
 
-# B: Simulation θ = -2... 
+
+
+
+# A and B: Simulation θ = -2... 
 true_parameters = define_parameters(1000, 5, -0.2, 0.5, -2, 0.5)
 avg1k, p_up1k, p_low1k = monte_carlo(true_parameters,  50, 0.05);
 
@@ -213,8 +245,7 @@ plot!((xAxis, avg10k[2:7]), markershape = :square, label=nothing, fillrange = [p
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=["N=1K, ci=0.95"], fillrange = [p_up1k[2:7]], fillalpha=0.3, c=:orange)
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=nothing, fillrange = [p_low1k[2:7]], fillalpha=0.3, c=:orange)
 plot!(legend=:bottomleft)
-savefig("Q2_Pb_Theta-2.pdf")
-
+savefig("Q3_Pb_Theta-2.pdf")
 
 
 # C: Simulation θ = 0...
@@ -230,7 +261,7 @@ plot!((xAxis, avg10k[2:7]), markershape = :square, label=nothing, fillrange = [p
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=["N=1K, ci=0.95"], fillrange = [p_up1k[2:7]], fillalpha=0.3, c=:orange)
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=nothing, fillrange = [p_low1k[2:7]], fillalpha=0.3, c=:orange)
 plot!(legend=:bottomleft)
-savefig("Q2_Pc_Theta-0.pdf")
+savefig("Q3_Pc_Theta-0.pdf")
 
 
 # C: Simulation θ = 1...
@@ -246,7 +277,7 @@ plot!((xAxis, avg10k[2:7]), markershape = :square, label=nothing, fillrange = [p
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=["N=1K, ci=0.95"], fillrange = [p_up1k[2:7]], fillalpha=0.3, c=:orange)
 plot!((xAxis, avg1k[2:7]), markershape = :square, label=nothing, fillrange = [p_low1k[2:7]], fillalpha=0.3, c=:orange)
 plot!(legend=:bottomleft)
-savefig("Q2_Pc_Theta-1.pdf")
+savefig("Q3_Pc_Theta-1.pdf")
 
 
 # Part D: Montecarlo for ATE
@@ -265,7 +296,59 @@ plot!(legend=:topleft)
 savefig("ATE_estimation.pdf")
 
 
-# Part E: Bootstrap with different methods.
+
+# Part E: Monte Carlo for to get estimator power...
+
+# 1. Classical asymptotic variance estimator under homoskedacity
+
+n_list = [20, 50, 200]
+
+ρ_list = [0, .5, 1]
+
+power_results_1 = zeros((length(n_list),length(ρ_list)))
+
+power_results_2 = zeros((length(n_list),length(ρ_list)))
+
+power_results_3 = zeros((length(n_list),length(ρ_list)))
+
+power_results_4 = zeros((length(n_list),length(ρ_list)))
+
+for ii in 1:length(n_list)
+
+    for jj in 1:length(ρ_list)
+
+        true_parameters = define_parameters(n_list[ii], 5, -0.2, 0.5, 1, ρ_list[jj])
+
+        df = data_generating_process(true_parameters,MersenneTwister(1234))
+
+        # β, se, t, p, ols1 = estimation(df,true);
+
+        # Specification 1
+        power = monte_carlo_power_test(true_parameters, false, 500)
+
+        power_results_1[ii,jj] = power
+
+        # Specification 3
+        power = monte_carlo_power_test(true_parameters, true, 500)
+
+        power_results_3[ii,jj] = power
+
+    end
+
+end
+
+power_results
+
+# 2. HC(1), heteroskedasticity proof.
+
+
+
+# 3. Cluster-robust asymptotic variance estimator, cluster over invidiauls i.
+
+
+
+# 4. Clustered Wild bootstrap, clustering over individuals i.
+
 
 
 
