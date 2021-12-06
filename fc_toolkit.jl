@@ -371,7 +371,32 @@ function se_homoskedastic(fit::olsRegression)
 end
 
 
-function inference(fit::olsRegression)
+function se_heteroskedastic_h1(fit::olsRegression)
+
+    x = fit.x; y = fit.y; β = fit.β
+    
+    N = length(y); K = size(x, 2);
+    
+    u = y - predict_outcome(fit) # residuals
+    
+    XX = x' * x
+    
+    XX_inv = inv(XX)
+    
+    varfunction(u,x) = u^2*(x*x')
+    
+    V_hat = sum(varfunction.(u,[x[ii,:] for ii in 1:size(x,1)]))
+    
+    covar = XX_inv*V_hat*XX_inv # covar = covar .* (1 / (N - K)) # dof adjustment
+    
+    se = sqrt.(covar[diagind(covar)])
+    
+    return se
+
+end
+
+
+function inference(fit::olsRegression, vartype="hom")
 
     # Obtain data parameters
     x = fit.x
@@ -388,8 +413,13 @@ function inference(fit::olsRegression)
         # println("Errors: Clustered")
         se = se_cluster(fit)
     else # If cluster is not pased on struct
-        # println("Errors: Homoskedastic")
-        se = se_homoskedastic(fit)
+        if vartype == "hom"
+            # println("Errors: Homoskedastic")
+            se = se_homoskedastic(fit)
+        elseif vartype == "het"
+            # println("Errors: heteroskedasticity")
+            se = se_heteroskedastic_h1(fit)
+        end
     end
 
     #Get standard errors, t-statistics, and p-values

@@ -128,7 +128,7 @@ end
 
 
 # Part B: Fixed effects estimation ...
-function estimation(df, cl=false)
+function estimation(df, cl=false, vartype="hom")
     
     N = Integer(maximum(df[:,:ID]))
     T = Integer(maximum(df[:,:TT]))
@@ -147,7 +147,7 @@ function estimation(df, cl=false)
         ols = olsRegression(Y, ones(N*T,1), AllFixedEffects)
     end
 
-    results = inference(ols)
+    results = inference(ols,vartype)
 
     return results.β, results.se, results.t, results.p, ols
 
@@ -206,7 +206,7 @@ function monte_carlo_ate(parameters, m = 12, α=0.025)
 end
 
 
-function monte_carlo_power_test(parameters, cl = false , m = 12, α=0.05)
+function monte_carlo_power_test(parameters, cl = false, vartype="hom", m = 12, α=0.05)
     
     parameters_placeholder = zeros(m,14)
 
@@ -217,7 +217,7 @@ function monte_carlo_power_test(parameters, cl = false , m = 12, α=0.05)
         _,
         _,
         pval_placeholder[mm,:],
-        _ = estimation(data_generating_process(parameters,MersenneTwister()), cl) 
+        _ = estimation(data_generating_process(parameters,MersenneTwister()), cl, vartype) 
     end    
 
     # Apply test for all draw results:
@@ -324,23 +324,37 @@ for ii in 1:length(n_list)
         # β, se, t, p, ols1 = estimation(df,true);
 
         # Specification 1
-        power = monte_carlo_power_test(true_parameters, false, 500)
+        power = monte_carlo_power_test(true_parameters, false, "hom", 500)
 
         power_results_1[ii,jj] = power
 
-        # Specification 3
+        # Specification 2: HC(1), heteroskedasticity proof
+        power = monte_carlo_power_test(true_parameters, false, "het", 500)
+
+        power_results_2[ii,jj] = power
+
+        # Specification 3: Cluster-robust asymptotic variance estimator,
         power = monte_carlo_power_test(true_parameters, true, 500)
 
         power_results_3[ii,jj] = power
+
+        # Specification 4: Wild bootstrap
+        # power = monte_carlo_power_test(true_parameters, true, 500)
+
+        power_results_4[ii,jj] = power
 
     end
 
 end
 
-power_results
 
-# 2. HC(1), heteroskedasticity proof.
+power_results_1
+power_results_2
+power_results_3
 
+# 2. 
+
+true_parameters = define_parameters(20, 5, -0.2, 0.5, 1, 0.5)
 
 
 # 3. Cluster-robust asymptotic variance estimator, cluster over invidiauls i.
@@ -355,11 +369,8 @@ power_results
 
 
 
-
-
-
-
-
+df = data_generating_process(true_parameters,MersenneTwister(1234))
+β, se, t, p, ols1 = estimation(df,true);
 
 
 
@@ -381,3 +392,6 @@ power_results
 #     return avg, p_upper, p_lower
 
 # end
+
+
+
