@@ -19,6 +19,8 @@ using Base.Threads
 using BenchmarkTools
 using GLM
 
+using JuMP, GLPK # for linear optimization
+
 include(joinpath(@__DIR__,"..", "..", "..","fc_toolkit.jl"))
 
 function load_dataset()
@@ -191,7 +193,7 @@ function get_propensity_score(df,covs)
 
     probit = glm(reg, df, Binomial(), ProbitLink())
 
-    propensity = predict(probit)
+    propensity = predict(probit,df)
 
     return propensity
 
@@ -298,6 +300,7 @@ function get_marginal_response(df, depvar, covariates, K, h_lo, h_up)
 end
 
 
+
 function get_average_treatmet(mte, D, propensity)
 
     ω_ate = 1
@@ -312,7 +315,7 @@ function get_average_treatmet(mte, D, propensity)
 
     ATU = mean(mte.*ω_atu)
 
-    return ATE, ATT, ATU
+    return ATE, ATT, ATU, ω_att, ω_atu
 
 end
 
@@ -342,12 +345,19 @@ function bootstrap_se_model(df, depvar, covariate_names, support)
 
 end
 
+
+
+
+############################
+# Implementation:
+############################
+
+
 # Part E: Estimate ATE, ATU, and ATT using MTE.
 # - Restrict attention to parametric specifications of MTR
 # - 1st estimating the treatment selection equation in (2) as a probit model to obtain estimates of the propensity score
 # - 2nd modeling 𝐾(𝑝) as a polynomial in 𝑝 of degree k and estimating the outcome equation
 
-# First check common support...
 
 # E) No covariates:
 
@@ -358,7 +368,7 @@ support  = (0.01, 1)
 # Hours worked
 depvar = model_variables[:depvar_c3]
 mte, mteall, πSet, allSet  = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) # ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
-ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
+ATE, ATU, ATT, ω_att, ω_atu = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
 # Get Bootstrapped Standard Errors:
 ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
 
@@ -395,7 +405,6 @@ ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support
 
 histogram(allSet[:propensity][allSet[:D][:].==1],  bins =20 , fillalpha=0.2)
 histogram!(allSet[:propensity][allSet[:D][:].==0], bins =20 ,fillalpha=0.2)
-
 
 scatter(allSet[:propensity],mteall,fillalpha=0.2)
 
@@ -466,6 +475,171 @@ covariate_names = [:constant]
 depvar = model_variables[:depvar_d2]
 PRTE = compute_prte(load_dataset(), depvar, covariate_names, 200)
 PRTE_se = bootstrap_prte(load_dataset(), depvar, covariate_names, 200)
+
+
+
+
+# Functions for part H & I:
+
+using MyMethods
+
+
+#From here I will use the notation from the jupyter notebook applied to my problem:
+# Z ∈ {low, med, high}
+# p 
+
+function get_weights(df)
+    
+    Z = Array(df[:,model_variables[:instruments]])
+    D = Array(df[:,model_variables[:treatment]])
+    
+    ind_1 = copy(Z)
+    for ii in 1:size(ind_1,1)
+        for jj in 1:2
+            if ind_1[ii,end-jj+1] == 1 
+                ind_1[ii,end-jj] = 1
+            end
+        end
+    end
+
+    z = Array(1:3)
+    # probability of getting treatment z ∈ {1,2,3}
+    p_z = mean(Z,dims=1)[:]
+    p_z = p_z./sum(p_z)
+    
+    # Propensity: p = P[D = 1 | Z = z]
+    p = [mean(D[Z[:,ii] .== 1]) for ii = 1:3]
+
+    Cov_DZ = (sum(p_z.*z.*p)) - sum(p.*p_z)*sum(z.*p_z) # Define population moments
+    s_IV = ((z .- sum(z.*p_z))./Cov_DZ)' # s(d,z)
+    w1_IV = s_IV .* ind_1 # weight for d = 1
+    w0_IV = s_IV .* (1 .- ind_1) # weight for d = 0
+
+    # TSLS slope
+    ZD = hcat(p_z, p_z.*p)' # Define population moments
+    inv_ZZ = I.*3
+    FS = inv_ZZ * ZD # first stage
+    s_TSLS = (inv(FS * ZD') * ZD * inv_ZZ)[2,:]' # s(d,z)
+    w1_TSLS = s_TSLS .* ind_1 # weight for d = 1
+    w0_TSLS = s_TSLS .* (1 .- ind_1) # weight for d = 0
+
+    return w1_IV, w0_IV, w1_TSLS, w0_TSLS
+end
+
+
+function get_gamma(B, w1, w0)
+    
+    # Get γ using some polynomial (Bernstein or Non parametrics)
+    
+    Bw1 = B .* mean(w1, dims=2)
+    
+    Bw0 = B .* mean(w0, dims=2)
+    
+    return mapslices(mean, Bw1, dims=1), mapslices(mean, Bw0, dims=1)
+
+end
+
+
+
+function get_bound(b_IV, b_TSLS,
+                    gamma_1IV, gamma_0IV,
+                    gamma_1TSLS, gamma_0TSLS,
+                    gamma_1ATT, gamma_0ATT;
+                    sense="Max", decreasing=false)
+
+    # Data parameters
+    K = length(gamma_1IV) - 1
+
+    # initialize model
+    m = Model(GLPK.Optimizer)
+
+    # initialize variables
+    @variable(m, 1 >= theta[1:(K+1), 1:2] >= 0) # bounded by 0 and 1
+
+    # set constraints
+    @constraint(m, IV, sum(theta[:,1].*gamma_1IV') +
+        sum(theta[:,2].*gamma_0IV')  == b_IV)
+    # @constraint(m, TSLS, sum(theta[:,1].*gamma_1TSLS') +
+    #     sum(theta[:,2].*gamma_0TSLS') == b_TSLS)
+
+    # Restrict to decreasing MTRs
+    if decreasing
+        @constraint(m, decreasing[j=1:K,s=1:2], theta[j,s] >= theta[j+1,s])
+    end
+
+    # define objective 
+    if sense == "Max"
+    @objective(m, Max, sum(theta[:,1].*gamma_1ATT') +
+            sum(theta[:,2].*gamma_0ATT')) # upper bound
+    elseif sense == "Min"
+    @objective(m, Min, sum(theta[:,1].*gamma_1ATT') +
+        sum(theta[:,2].*gamma_0ATT')) # upper bound
+    end
+
+    # solve model
+    MOI.set(m, MOI.Silent(), true)
+    optimize!(m)
+    bound = objective_value(m)
+
+    # Return bound
+    return bound
+end
+
+
+
+# Get Bernstein poly basis terms and compute the gamma
+b_IV = -2.6
+b_TSLS = -3.5
+k = 4
+nMC = length(mte)
+u = rand(Uniform(),nMC)
+w1_IV, w0_IV, w1_TSLS, w0_TSLS = get_weights(df)
+Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
+gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, ω_att, .-ω_att)
+gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV, w0_IV)
+gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
+
+p_bounds = zeros(2, 2, 19)
+for k in 1:5
+    # Get Bernstein poly basis terms and compute the gamma
+    Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
+    gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV, w0_IV)
+    gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
+    gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, ω_att, .-ω_att)
+
+    # Compute the parametric bounds
+    for dec in (false,true)
+        # lower bound
+        p_bounds[dec+1, 1, k] = get_bound(b_IV, b_TSLS,
+                gamma_1IV, gamma_0IV,
+                gamma_1TSLS, gamma_0TSLS,
+                gamma_1ATT, gamma_0ATT,
+                sense = "Min", decreasing = dec)
+
+        # upper bound
+        p_bounds[dec+1, 2, k] = get_bound(b_IV, b_TSLS,
+                gamma_1IV, gamma_0IV,
+                gamma_1TSLS, gamma_0TSLS,
+                gamma_1ATT, gamma_0ATT,
+                sense = "Max", decreasing = dec)
+    end
+end
+
+
+pyplot(size=(500,300), leg=true);
+_x = collect(1:k)
+
+# parametric bounds
+plot(_x, p_bounds[1,1,:], line = (:line, :line, 0.8, 1, :blue), label = "")
+plot!(_x, p_bounds[1,1,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
+plot!(_x, p_bounds[1,2,:], line = (:line, :line, 0.8, 1, :blue), label="")
+plot!(_x, p_bounds[1,2,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
+
+# # parametric bounds w/ decreasing MTRs
+# plot!(_x, p_bounds[2,1,:], line = (:line, :line, 0.8, 1, :orange), label="")
+# plot!(_x, p_bounds[2,1,:], seriestype = :scatter, markershape=:rect, markersize=4, color=:orange, label="")
+# plot!(_x, p_bounds[2,2,:], line = (:line, :line, 0.8, 1, :orange), label="")
+# plot!(_x, p_bounds[2,2,:], seriestype = :scatter, markershape=:rect, markersize=4, color=:orange, label="")
 
 
 

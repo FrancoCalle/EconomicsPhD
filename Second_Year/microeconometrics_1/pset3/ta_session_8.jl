@@ -87,10 +87,11 @@ end
 
 # Function to obtain lower/upper bound for ATT given IV and TSLS slope
 function get_bound(b_IV, b_TSLS,
-        gamma_1IV, gamma_0IV,
-        gamma_1TSLS, gamma_0TSLS,
-        gamma_1ATT, gamma_0ATT;
-        sense="Max", decreasing=false)
+                    gamma_1IV, gamma_0IV,
+                    gamma_1TSLS, gamma_0TSLS,
+                    gamma_1ATT, gamma_0ATT;
+                    sense="Max", decreasing=false)
+                    
     # Data parameters
     K = length(gamma_1IV) -1
 
@@ -159,6 +160,35 @@ for k in 1:19
     end
 end
 
+
+
+# Get Bernstein poly basis terms and compute the gamma
+k = 4
+Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
+gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV[:,1], w0_IV[:,1])
+gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
+gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, w1_ATT, w0_ATT)
+
+# Compute the parametric bounds
+p_bounds = zeros(2, 2, 19)
+
+for dec in (false,true)
+    # lower bound
+    p_bounds[dec+1, 1, k] = get_bound(b_IV, b_TSLS,
+            gamma_1IV, gamma_0IV,
+            gamma_1TSLS, gamma_0TSLS,
+            gamma_1ATT, gamma_0ATT,
+            sense = "Min", decreasing = dec)
+
+    # upper bound
+    p_bounds[dec+1, 2, k] = get_bound(b_IV, b_TSLS,
+            gamma_1IV, gamma_0IV,
+            gamma_1TSLS, gamma_0TSLS,
+            gamma_1ATT, gamma_0ATT,
+            sense = "Max", decreasing = dec)
+end
+
+p_bounds[:,:,5]
 
 
 
@@ -230,7 +260,7 @@ plot!(_x, np_bounds[2,2,:], line = (:line, :dot, 0.8, 1, :orange), label="")
 plot!(_x, np_bounds[2,2,:], seriestype = :scatter, markershape=:rect, markersize=4, color=:orange, label="")
 
 # Additional formatting
-plot!(ylim=[-1,0.25], yticks = -1:0.2:0.4, xticks = 1:1:19, 
+plot!(ylim=[-1,0.4], yticks = -1:0.2:0.4, xticks = 1:1:19, 
     legend=(0,0), framestyle = :box, grid=false, 
     background_color_legend = nothing)
 ylabel!("Upper and lower bounds")
