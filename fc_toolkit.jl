@@ -291,6 +291,52 @@ function propensityScoreMatching(x, y, d, k)
 
 end
 
+function se_homoskedastic(fit::olsRegression)
+
+    x = fit.x; y = fit.y; β = fit.β
+    
+    N = length(y); K = size(x, 2);
+
+    u = y - predict_outcome(fit) # residuals
+
+    XX_inv = inv(x' * x)
+
+    covar = sum(u.^2) * XX_inv
+
+    covar = covar .* (1 / (N - K)) # dof adjustment
+
+    # Get standard errors, t-statistics, and p-values
+
+    se = sqrt.(covar[diagind(covar)])
+
+    return se
+
+end
+
+function se_heteroskedastic_h1(fit::olsRegression)
+
+    x = fit.x; y = fit.y; β = fit.β
+    
+    N = length(y); K = size(x, 2);
+    
+    u = y - predict_outcome(fit) # residuals
+    
+    XX = x' * x
+    
+    XX_inv = inv(XX)
+    
+    varfunction(u,x) = u^2*(x*x')
+    
+    V_hat = sum(varfunction.(u,[x[ii,:] for ii in 1:size(x,1)]))
+    
+    covar = XX_inv*V_hat*XX_inv # covar = covar .* (1 / (N - K)) # dof adjustment
+    
+    se = sqrt.(covar[diagind(covar)])
+    
+    return se
+
+end
+
 
 
 function se_cluster(fit::olsRegression)
@@ -330,7 +376,7 @@ function se_cluster(fit::olsRegression)
 
     varcov =   Bread' * Meat * Bread
     
-    function mat_posdef_fix(X::Matrix; tol = 1e-10) # Thanks Ed.
+    function mat_posdef_fix(X::Matrix; tol = 1e-10) 
         if any(diag(X) .< tol)
             e_vals, e_vecs = eigen(Symmetric(X))
             e_vals[e_vals .<= tol] .= tol
@@ -341,62 +387,83 @@ function se_cluster(fit::olsRegression)
 
     vcov_matrix = mat_posdef_fix(varcov)
     
-    se = sqrt.(diag(varcov))
+    se = sqrt.(diag(vcov_matrix))
 
     return se
 
 end
 
 
-function se_homoskedastic(fit::olsRegression)
-
-    x = fit.x; y = fit.y; β = fit.β
+# Cheated a little bit here since I'm defaulting indicator and β0, not much time to automate it.
+function se_wild_bootstrap(fit::olsRegression, indicator=5, β0=sin(1))
     
-    N = length(y); K = size(x, 2);
+    # Unpack stuff
+    x = fit.x; y = fit.y ;cl = fit.cl; xᵀx = x'*x;
 
-    u = y - predict_outcome(fit) # residuals
+    n = size(y, 1); k = size(x, 2);
+    
+    clusters = unique(cl)
+    C = length(clusters)
+    R = (C / (C-1)) * ((n-1)/(n-k))
 
-    XX_inv = inv(x' * x)
+    # Variables except for target D1
+    x_del = hcat(x[:,1:indicator-1],x[:,indicator+1:end])
+    β_del = y\x_del
+    
+    # Eliminate the true effect:
+    u = y .- x[:,indicator] .* β0
 
-    covar = sum(u.^2) * XX_inv
+    # Random sign:
+    rand_sign = rand((0, 2), n) .- 1
+            
+    # Construct wild y
+    y_w = x[:,indicator] .* β0 + x_del * β_del' + u.*rand_sign
+    
+    # Beta wild:
+    β_w = y_w\x
 
-    covar = covar .* (1 / (N - K)) # dof adjustment
+    # Residual:
+    res = y - x*β_w' #res = y_w - x*β_w'
 
-    # Get standard errors, t-statistics, and p-values
+    function clust_residuals(c)
 
-    se = sqrt.(covar[diagind(covar)])
+        cindex = findall(cl .== c) # Find index of observations that belong to cluster c 
+        Xc = Matrix(x[cindex,:])   # Convert to matrix
+        resc = Matrix(res[cindex,:]) 
+        meat = Xc'*resc*resc'*Xc
+
+        return meat
+    end
+
+    meat_cluster = broadcast(
+                            c -> clust_residuals(c), 
+                            clusters
+                            )
+    
+    Meat = reduce(+, meat_cluster.*R)
+    Bread = inv(xᵀx)
+
+    varcov =   Bread' * Meat * Bread
+    
+    function mat_posdef_fix(X::Matrix; tol = 1e-10) 
+        if any(diag(X) .< tol)
+            e_vals, e_vecs = eigen(Symmetric(X))
+            e_vals[e_vals .<= tol] .= tol
+            X = e_vecs * Diagonal(e_vals) * e_vecs'
+        end
+        return X
+    end
+
+    vcov_matrix = mat_posdef_fix(varcov)
+    
+    se = sqrt.(diag(vcov_matrix))
 
     return se
 
 end
 
 
-function se_heteroskedastic_h1(fit::olsRegression)
-
-    x = fit.x; y = fit.y; β = fit.β
-    
-    N = length(y); K = size(x, 2);
-    
-    u = y - predict_outcome(fit) # residuals
-    
-    XX = x' * x
-    
-    XX_inv = inv(XX)
-    
-    varfunction(u,x) = u^2*(x*x')
-    
-    V_hat = sum(varfunction.(u,[x[ii,:] for ii in 1:size(x,1)]))
-    
-    covar = XX_inv*V_hat*XX_inv # covar = covar .* (1 / (N - K)) # dof adjustment
-    
-    se = sqrt.(covar[diagind(covar)])
-    
-    return se
-
-end
-
-
-function inference(fit::olsRegression, vartype="hom")
+function inference(fit::olsRegression, vartype="hom", β_0=0)
 
     # Obtain data parameters
     x = fit.x
@@ -410,8 +477,13 @@ function inference(fit::olsRegression, vartype="hom")
 
     # Calculate the covariance under homoskedasticity
     if fit.flag_cl == true  # If cluster is passed on struct
-        # println("Errors: Clustered")
-        se = se_cluster(fit)
+        if vartype == "clust"
+            # println("Errors: clustered")
+            se = se_cluster(fit)
+        elseif vartype == "wild"
+            # println("Errors: freaking wild")
+            se = se_wild_bootstrap(fit)
+        end
     else # If cluster is not pased on struct
         if vartype == "hom"
             # println("Errors: Homoskedastic")
@@ -424,7 +496,7 @@ function inference(fit::olsRegression, vartype="hom")
 
     #Get standard errors, t-statistics, and p-values
     # se = sqrt.(covar[diagind(covar)])
-    t_stat = β ./ se
+    t_stat = (β.-β_0) ./ se
     p_val = 2 .* cdf.(TDist(N-K), - abs.(t_stat))
     r2 = 1 - sum(u.^2)/sum((y.-mean(y)).^2)
     # Organize and return output

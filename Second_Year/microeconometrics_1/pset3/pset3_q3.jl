@@ -147,7 +147,8 @@ function estimation(df, cl=false, vartype="hom")
         ols = olsRegression(Y, ones(N*T,1), AllFixedEffects)
     end
 
-    results = inference(ols,vartype)
+    # Test under the null of true (just for D_1)
+    results = inference(ols ,vartype, ones(size(ols.β)).*sin(1)) 
 
     return results.β, results.se, results.t, results.p, ols
 
@@ -226,9 +227,6 @@ function monte_carlo_power_test(parameters, cl = false, vartype="hom", m = 12, �
     return power
 
 end
-
-
-
 
 
 
@@ -313,35 +311,26 @@ power_results_3 = zeros((length(n_list),length(ρ_list)))
 
 power_results_4 = zeros((length(n_list),length(ρ_list)))
 
+# power_results_5 = zeros((length(n_list),length(ρ_list)))
+
+
 for ii in 1:length(n_list)
 
     for jj in 1:length(ρ_list)
 
         true_parameters = define_parameters(n_list[ii], 5, -0.2, 0.5, 1, ρ_list[jj])
 
-        df = data_generating_process(true_parameters,MersenneTwister(1234))
-
-        # β, se, t, p, ols1 = estimation(df,true);
-
         # Specification 1
-        power = monte_carlo_power_test(true_parameters, false, "hom", 500)
-
-        power_results_1[ii,jj] = power
+        power_results_1[ii,jj] = monte_carlo_power_test(true_parameters, false, "hom", 2000);
 
         # Specification 2: HC(1), heteroskedasticity proof
-        power = monte_carlo_power_test(true_parameters, false, "het", 500)
-
-        power_results_2[ii,jj] = power
+        power_results_2[ii,jj] = monte_carlo_power_test(true_parameters, false, "het", 2000);
 
         # Specification 3: Cluster-robust asymptotic variance estimator,
-        power = monte_carlo_power_test(true_parameters, true, 500)
-
-        power_results_3[ii,jj] = power
+        power_results_3[ii,jj] = monte_carlo_power_test(true_parameters, true, "clust", 2000);
 
         # Specification 4: Wild bootstrap
-        # power = monte_carlo_power_test(true_parameters, true, 500)
-
-        power_results_4[ii,jj] = power
+        power_results_4[ii,jj] = monte_carlo_power_test(true_parameters, true, "wild", 2000);
 
     end
 
@@ -351,47 +340,28 @@ end
 power_results_1
 power_results_2
 power_results_3
-
-# 2. 
-
-true_parameters = define_parameters(20, 5, -0.2, 0.5, 1, 0.5)
-
-
-# 3. Cluster-robust asymptotic variance estimator, cluster over invidiauls i.
-
-
-
-# 4. Clustered Wild bootstrap, clustering over individuals i.
+power_results_4
 
 
 
 
 
+# # 4. Clustered Wild bootstrap, clustering over individuals i.
+# true_parameters = define_parameters(20, 5, -0.2, 0.5, 1, 0.5)
+# df = data_generating_process(true_parameters,MersenneTwister(1234))
+# β, se_clust, t, p, ols1 = estimation(df, true, "clust");
+# β, se_wild, t, p, ols1 = estimation(df, true, "wild");
+
+# se_clust[5]
+# se_wild[5]
+
+# scatter(se_clust, se_wild,xlims=(0, 1.5),ylims=(0, 1.5))
 
 
-df = data_generating_process(true_parameters,MersenneTwister(1234))
-β, se, t, p, ols1 = estimation(df,true);
+# se_wild_bootstrap(ols1)
 
 
 
-
-
-# function parallel_monte_carlo(parameters, m = 12, α=0.025)
-    
-#     parameters_placeholder = zeros(m,14)
-#     rnglist = [MersenneTwister() for i in 1:nthreads()]
-
-#     @threads for mm in 1:m
-#         parameters_placeholder[mm,:] = estimation(data_generating_process(parameters, rnglist[threadid()])) 
-#     end    
-
-#     p_lower = [quantile(parameters_placeholder[:,jj], α)   for jj in 1:size(parameters_placeholder,2)]
-#     p_upper  = [quantile(parameters_placeholder[:,jj], 1-α) for jj in 1:size(parameters_placeholder,2)]
-#     avg = mean.(eachcol(parameters_placeholder))
-
-#     return avg, p_upper, p_lower
-
-# end
 
 
 
