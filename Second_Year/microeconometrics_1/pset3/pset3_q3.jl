@@ -207,7 +207,7 @@ function monte_carlo_ate(parameters, m = 12, α=0.025)
 end
 
 
-function monte_carlo_power_test(parameters, cl = false, vartype="hom", m = 12, α=0.05)
+function monte_carlo_size_test(parameters, cl = false, vartype="hom", m = 12, α=0.05)
     
     parameters_placeholder = zeros(m,14)
 
@@ -303,15 +303,15 @@ n_list = [20, 50, 200]
 
 ρ_list = [0, .5, 1]
 
-power_results_1 = zeros((length(n_list),length(ρ_list)))
+size_results_1 = zeros((length(n_list),length(ρ_list)))
 
-power_results_2 = zeros((length(n_list),length(ρ_list)))
+size_results_2 = zeros((length(n_list),length(ρ_list)))
 
-power_results_3 = zeros((length(n_list),length(ρ_list)))
+size_results_3 = zeros((length(n_list),length(ρ_list)))
 
-power_results_4 = zeros((length(n_list),length(ρ_list)))
+size_results_4 = zeros((length(n_list),length(ρ_list)))
 
-# power_results_5 = zeros((length(n_list),length(ρ_list)))
+# size_results_5 = zeros((length(n_list),length(ρ_list)))
 
 
 for ii in 1:length(n_list)
@@ -321,45 +321,36 @@ for ii in 1:length(n_list)
         true_parameters = define_parameters(n_list[ii], 5, -0.2, 0.5, 1, ρ_list[jj])
 
         # Specification 1
-        power_results_1[ii,jj] = monte_carlo_power_test(true_parameters, false, "hom", 2000);
+        size_results_1[jj,ii] = monte_carlo_size_test(true_parameters, false, "hom", 2000);
 
         # Specification 2: HC(1), heteroskedasticity proof
-        power_results_2[ii,jj] = monte_carlo_power_test(true_parameters, false, "het", 2000);
+        size_results_2[jj,ii] = monte_carlo_size_test(true_parameters, false, "het", 2000);
 
         # Specification 3: Cluster-robust asymptotic variance estimator,
-        power_results_3[ii,jj] = monte_carlo_power_test(true_parameters, true, "clust", 2000);
+        size_results_3[jj,ii] = monte_carlo_size_test(true_parameters, true, "clust", 2000);
 
         # Specification 4: Wild bootstrap
-        power_results_4[ii,jj] = monte_carlo_power_test(true_parameters, true, "wild", 2000);
+        size_results_4[jj,ii] = monte_carlo_size_test(true_parameters, true, "wild", 2000);
 
     end
 
 end
 
 
-power_results_1
-power_results_2
-power_results_3
-power_results_4
+#n is rows
+#ρ is columns
 
+results_table = DataFrame(  NObs            = [20,20,20, 50,50,50, 200,200,200],
+                            Rho             = [0, .5, 1, 0, .5, 1, 0, .5, 1],
+                            Homoskedastic   = size_results_1[:],
+                            Heteroskedastic = size_results_2[:], 
+                            Cluster         = size_results_3[:], 
+                            WildCluster     = size_results_4[:], 
+                            );
 
+println(results_table)
 
-
-
-# # 4. Clustered Wild bootstrap, clustering over individuals i.
-# true_parameters = define_parameters(20, 5, -0.2, 0.5, 1, 0.5)
-# df = data_generating_process(true_parameters,MersenneTwister(1234))
-# β, se_clust, t, p, ols1 = estimation(df, true, "clust");
-# β, se_wild, t, p, ols1 = estimation(df, true, "wild");
-
-# se_clust[5]
-# se_wild[5]
-
-# scatter(se_clust, se_wild,xlims=(0, 1.5),ylims=(0, 1.5))
-
-
-# se_wild_bootstrap(ols1)
-
+CSV.write("Q3_PE_size_test.csv",  round.(results_table,sigdigits = 3), writeheader=false)
 
 
 
