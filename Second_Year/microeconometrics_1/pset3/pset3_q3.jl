@@ -181,8 +181,8 @@ function average_treatment_effect(df)
     t2 = mean(df[(df.TT .== 3).& (df.EE .>= 4), :YY]) - mean(df[(df.TT .== 2).& (df.EE .>= 4), :YY])
     ATE2 = (mean(df[(df.TT .== 3) .& (df.EE .== 2), :YY]) 
                 - mean(df[(df.TT .== 1) .& (df.EE .== 2), :YY]) 
-                + t1 
-                + t2)
+                - t1 
+                - t2)
 
     return ATE2
 end
