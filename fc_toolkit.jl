@@ -151,10 +151,13 @@ end
 struct tsls_regression
     
     β::Array{Float64} # coefficient
-    x::Array{Float64} # features
     y::Array{Float64} # response
     d::Array{Float64}
+    z::Array{Float64} # features
     cl::Array # clusters
+    ZZ_inv::Array{Float64}
+    P_z::Array{Float64}
+    Π::Array{Float64}
 
     function tsls_regression(y, d, z, x=nothing, fe=nothing, cl=nothing, intercept=true)
 
@@ -186,7 +189,7 @@ struct tsls_regression
         
         Π = z\d
         
-        return isnothing(cl) ? new(β, y, d, z, [NaN]) : new(β, y, d, z, cl)
+        return isnothing(cl) ? new(β, y, d, z, [NaN], ZZ_inv, P_Z, Π) : new(β, y, d, z, cl, ZZ_inv, P_Z, Π)
 
     end
 end
@@ -338,6 +341,27 @@ function se_heteroskedastic_h1(fit::olsRegression)
 end
 
 
+function se_heteroskedastic_h1(fit::tsls_regression)
+
+    d = fit.d; y = fit.y; β = fit.β; 
+    
+    ZZ_inv = fit.ZZ_inv ; Π = fit.Π
+        
+    u = y - predict_outcome(fit) # residuals
+            
+    varfunction(u,x) = u^2*(x*x')
+    
+    V_hat = sum(varfunction.(u,[d[ii,:] for ii in 1:size(d,1)]))
+    
+    covar = (Π' * ZZ_inv * Π)*V_hat*(Π' * ZZ_inv * Π) # covar = covar .* (1 / (N - K)) # dof adjustment
+    
+    se = sqrt.(covar[diagind(covar)])
+    
+    return se
+
+end
+
+
 
 function se_cluster(fit::olsRegression)
 
@@ -459,6 +483,34 @@ function se_wild_bootstrap(fit::olsRegression, indicator=5, β0=sin(1))
     se = sqrt.(diag(vcov_matrix))
 
     return se
+
+end
+
+
+function inference(fit::tsls_regression, vartype="het")
+
+    # Obtain data parameters
+    d = fit.d
+    y = fit.y
+    β = fit.β
+    
+    N = length(y); 
+    K = size(d, 2);
+
+    u = y - predict_outcome(fit) # residuals
+
+    # Calculate the covariance under homoskedasticity
+    se = se_heteroskedastic_h1(fit)
+
+    #Get standard errors, t-statistics, and p-values
+    # se = sqrt.(covar[diagind(covar)])
+    t_stat = β./ se
+    p_val = 2 .* cdf.(TDist(N-K), - abs.(t_stat))
+    r2 = 1 - sum(u.^2)/sum((y.-mean(y)).^2)
+    # Organize and return output
+    output = (β = β, se = se, t = t_stat, p = p_val, r = r2)
+
+    return output
 
 end
 

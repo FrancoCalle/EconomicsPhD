@@ -289,8 +289,9 @@ for ii in 1:3
     ate_true[ii] = sin(3 - 2 * θ)
 end
 
-plot(ate_true, ate, markershape = :square, label=["Coefficients"], c=:blue)
-plot!(legend=:topleft)
+scatter(ate_true, ate, markershape = :square, label="Coefficients", c=:blue, xlabel = "True Parameters", ylabel = "Simulation Average")
+plot!([0,1],[0,1] , label="45 degree line")
+scatter!(legend=:topleft)
 savefig("ATE_estimation.pdf")
 
 

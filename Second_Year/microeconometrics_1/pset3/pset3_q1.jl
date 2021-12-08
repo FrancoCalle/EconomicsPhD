@@ -54,7 +54,7 @@ function define_variables()
     # Covariates:
     covariates_comunity = [:busia, :market, :transearly, :connected_rate, :population]
 
-    household = [:female, :base_age, :educ, :bank, :housing, :asset_value, :energyspending]
+    household = [:female, :age_resp, :educ, :bank, :housing, :asset_value, :energyspending, :round2]
 
     cluster = [:siteno]
 
@@ -98,14 +98,15 @@ function compute_results_part_a()
     Y, X, _, CL= select_variables(df, depvar, x_vars, nothing, model_variables[:cluster])
     CL = CategoricalArray(CL)
     ols_c3 = olsRegression(Y,X, nothing, CL[:])
-    ols_c3 = inference(ols1)
+    ols_c3 = inference(ols_c3, "clust")
     ols_c3.se
     ols_c3.β
-
 
     println("TOT:")
     Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_c3 = tsls_regression(Y, D, Z, X)
+    tsls_c3 = inference(tsls_c3)
+    tsls_c3.se
     tsls_c3.β
 
     # Replicate D2 TOT: Life Satisfaction:
@@ -117,18 +118,30 @@ function compute_results_part_a()
     Y, X, _, CL= select_variables(df, depvar, x_vars, nothing, model_variables[:cluster])
     CL = CategoricalArray(CL)
     ols_d2 = olsRegression(Y,X, nothing, CL[:])
+    ols_d2 = inference(ols1, "clust")
+    ols_d2.se
     ols_d2.β
-    inference(ols1)
 
     println("TOT:")
     Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_d2 = tsls_regression(Y, D, Z, X)
+    tsls_d2 = inference(tsls_d2)
+    tsls_d2.se
     tsls_d2.β
 
     return ols_c3, tsls_c3, ols_d2, tsls_d2
     
 end
 
+
+
+
+
+
+
+
+
+compute_results_part_a()
 
 # Part D: Show that results in (a) do not change much by not controlling for covariates
 function compute_results_part_d()
