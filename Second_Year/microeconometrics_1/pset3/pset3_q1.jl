@@ -99,15 +99,11 @@ function compute_results_part_a()
     CL = CategoricalArray(CL)
     ols_c3 = olsRegression(Y,X, nothing, CL[:])
     ols_c3 = inference(ols_c3, "clust")
-    ols_c3.se
-    ols_c3.β
 
     println("TOT:")
     Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_c3 = tsls_regression(Y, D, Z, X)
     tsls_c3 = inference(tsls_c3)
-    tsls_c3.se
-    tsls_c3.β
 
     # Replicate D2 TOT: Life Satisfaction:
     #-------------------------------------
@@ -118,30 +114,35 @@ function compute_results_part_a()
     Y, X, _, CL= select_variables(df, depvar, x_vars, nothing, model_variables[:cluster])
     CL = CategoricalArray(CL)
     ols_d2 = olsRegression(Y,X, nothing, CL[:])
-    ols_d2 = inference(ols1, "clust")
-    ols_d2.se
-    ols_d2.β
+    ols_d2 = inference(ols_d2, "clust")
 
     println("TOT:")
     Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_d2 = tsls_regression(Y, D, Z, X)
     tsls_d2 = inference(tsls_d2)
-    tsls_d2.se
-    tsls_d2.β
 
-    return ols_c3, tsls_c3, ols_d2, tsls_d2
+    # Compile results:
+    results = zeros(4,2)
+    #ITT
+    results[1,1] = ols_c3.β[1]
+    results[2,1] = ols_c3.se[1]
+
+    results[3,1] = ols_d2.β[1]
+    results[4,1] = ols_d2.se[1]
+
+    #TOT:
+    results[1,2] = tsls_c3.β[1]
+    results[2,2] = tsls_c3.se[1]
+
+    results[3,2] = tsls_d2.β[1]
+    results[4,2] = tsls_d2.se[1]
+
+    return results, ols_c3, tsls_c3, ols_d2, tsls_d2
     
 end
 
 
 
-
-
-
-
-
-
-compute_results_part_a()
 
 # Part D: Show that results in (a) do not change much by not controlling for covariates
 function compute_results_part_d()
@@ -154,15 +155,15 @@ function compute_results_part_d()
     println("ITT:")
     Y, X, _, CL= select_variables(df, depvar, [itt_treatment], nothing, model_variables[:cluster])
     CL = CategoricalArray(CL)
-    ols1 = olsRegression(Y,X, nothing, CL[:])
-    ols_c3 = inference(ols1)
-    ols_c3.β
-    ols_c3.se
+    ols_c3 = olsRegression(Y,X, nothing, CL[:])
+    ols_c3 = inference(ols_c3, "clust")
 
     println("TOT:")
-    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_c3 = tsls_regression(Y, D, Z)
-    tsls_c3.β
+    tsls_c3 = inference(tsls_c3)
+
+    println(mean(Y[X.==0]), " ",std(Y[X.==0]))
 
     # Replicate D2 TOT: Life Satisfaction:
     #-------------------------------------
@@ -173,17 +174,42 @@ function compute_results_part_d()
     Y, X, _, CL= select_variables(df, depvar, [itt_treatment], nothing, model_variables[:cluster])
     CL = CategoricalArray(CL)
     ols_d2 = olsRegression(Y,X, nothing, CL[:])
-    ols_d2.β
-    inference(ols1)
+    ols_d2 = inference(ols_d2, "clust")
 
     println("TOT:")
-    Y, X, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
     tsls_d2 = tsls_regression(Y, D, Z)
-    tsls_d2.β
-    
-    return ols_c3, tsls_c3, ols_d2, tsls_d2
+    tsls_d2 = inference(tsls_d2)
+
+    println(mean(Y[X.==0]),std(Y[X.==0]))
+
+    # Compile results:
+    results = zeros(4,2)
+    #ITT
+    results[1,1] = ols_c3.β[1]
+    results[2,1] = ols_c3.se[1]
+
+    results[3,1] = ols_d2.β[1]
+    results[4,1] = ols_d2.se[1]
+
+    #TOT:
+    results[1,2] = tsls_c3.β[1]
+    results[2,2] = tsls_c3.se[1]
+
+    results[3,2] = tsls_d2.β[1]
+    results[4,2] = tsls_d2.se[1]
+
+    return results, ols_c3, tsls_c3, ols_d2, tsls_d2
 
 end
+
+
+results_a,_ = compute_results_part_a()
+results_d,_ = compute_results_part_d()
+
+
+CSV.write("Q1_PA_ITT_TOT.csv",  Tables.table(round.(results_a,sigdigits = 3)))
+CSV.write("Q1_PD_ITT_TOT.csv",  Tables.table(round.(results_d,sigdigits = 3)))
 
 
 
