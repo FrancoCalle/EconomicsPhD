@@ -624,6 +624,9 @@ function get_bound(b_IV, b_TSLS,
 end
 
 
+# Part I: Parameterize the MTR function using the Bernstein polynomials, omiting
+# covariates, and re-compute bounds on the ATU using the same prior
+# outcome bounds as in (h).
 
 
 # Get Bernstein poly basis terms and compute the gamma
@@ -633,7 +636,6 @@ K = 30
 nMC = length(mte)
 u = rand(Uniform(),nMC)
 w1_IV, w0_IV, w1_TSLS, w0_TSLS, w1_ATT, w1_ATU = get_weights(df)
-
 
 # We have 3: ATU 
 p_bounds = zeros(2, 2, K)
@@ -663,7 +665,6 @@ for k in 1:K
 end
 
 
-# This is puzzling since previously I found that ATU was negative ...
 pyplot(size=(500,300), leg=true);
 _x = collect(1:K)
 
@@ -676,26 +677,42 @@ savefig("Q1_PH_ATU_bounds.pdf")
 
 
 
-# # parametric bounds w/ decreasing MTRs
-# plot!(_x, p_bounds[2,1,:], line = (:line, :line, 0.8, 1, :orange), label="")
-# plot!(_x, p_bounds[2,1,:], seriestype = :scatter, markershape=:rect, markersize=4, color=:orange, label="")
-# plot!(_x, p_bounds[2,2,:], line = (:line, :line, 0.8, 1, :orange), label="")
-# plot!(_x, p_bounds[2,2,:], seriestype = :scatter, markershape=:rect, markersize=4, color=:orange, label="")
-
-
 
 # Part H: Pick prior lower and upper bounds for the two outcomes in A and  discuss choices.
 # - Compute nonparametric bounds on the ATU that use all info in E[Y_i | D_i, Z_i].
 
+p = [0.16216216216216217, 0.319060773480663, 0.9473684210526315]
+CSplines = MyMethods.get_basis(u, "CSplines2", 6, p) 
+gamma_1IV, gamma_0IV = get_gamma(CSplines, w1_IV, w0_IV)
+gamma_1TSLS, gamma_0TSLS = get_gamma(CSplines, w1_TSLS, w0_TSLS)
+gamma_1ATU, gamma_0ATU = get_gamma(CSplines, .-w1_ATU, w1_ATU)
 
+# Compute the nonparametric bounds
+np_bounds = zeros(2,2)
+for dec in (false,true)
+    # lower bound
+    np_bounds[dec+1, 1] = get_bound(b_IV, b_TSLS,
+            gamma_1IV, gamma_0IV,
+            gamma_1TSLS, gamma_0TSLS,
+            gamma_1ATU, gamma_0ATU,
+            sense = "Min", decreasing = dec)
+    
+    # upper bound
+    np_bounds[dec+1, 2] = get_bound(b_IV, b_TSLS,
+            gamma_1IV, gamma_0IV,
+            gamma_1TSLS, gamma_0TSLS,
+            gamma_1ATU, gamma_0ATU,
+            sense = "Max", decreasing = dec)
+end
 
+# cast np_bounds to dimension of p_bounds
+np_bounds = reshape(repeat(np_bounds, K)', (2, 2, K));
 
+plot!(_x, np_bounds[1,1,:], line = (:line, :dot, 0.8, 1, :red), label="Nonparametric")
+plot!(_x, np_bounds[2,1,:], line = (:line, :dot, 0.8, 1, :red), label="")
 
+savefig("Q1_PH_ATU_noparam_bounds.pdf")
 
-
-# Part I: Parameterize the MTR function using the Bernstein polynomials, omiting
-# covariates, and re-compute bounds on the ATU using the same prior
-# outcome bounds as in (h).
 
 
 
