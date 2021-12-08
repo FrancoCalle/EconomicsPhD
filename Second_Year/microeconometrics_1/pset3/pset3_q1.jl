@@ -68,24 +68,6 @@ function define_variables()
                 :cluster => cluster)
 end
 
-df = load_dataset()
-
-model_variables = define_variables()
-
-# Part A: Replicate cols (1) and (3) rows C3 and D2 of table 3 
-
-# Specification for ITT only uses "treat_full", meanwhile TOT instruments electrification status vs all subsidies
-instrument = model_variables[:instruments]
-treatment = [model_variables[:treatment]]
-covariates=[]
-append!(covariates,model_variables[:household])
-append!(covariates,model_variables[:comunity])
-itt_treatment = model_variables[:itt_treatment]
-
-x_vars = []
-x_vars = append!(x_vars, [itt_treatment])
-x_vars = append!(x_vars, covariates)
-
 
 function compute_results_part_a()
     
@@ -159,11 +141,11 @@ function compute_results_part_d()
     ols_c3 = inference(ols_c3, "clust")
 
     println("TOT:")
-    Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    Y, _, D, Z  = select_variables(df, depvar, [:constant], treatment, instrument)
     tsls_c3 = tsls_regression(Y, D, Z)
     tsls_c3 = inference(tsls_c3)
 
-    println(mean(Y[X.==0]), " ",std(Y[X.==0]))
+    println(mean(Y[X[:].==0]), " ",std(Y[X[:].==0]))
 
     # Replicate D2 TOT: Life Satisfaction:
     #-------------------------------------
@@ -177,7 +159,7 @@ function compute_results_part_d()
     ols_d2 = inference(ols_d2, "clust")
 
     println("TOT:")
-    Y, _, D, Z  = select_variables(df, depvar, covariates, treatment, instrument)
+    Y, _, D, Z  = select_variables(df, depvar, [:constant], treatment, instrument)
     tsls_d2 = tsls_regression(Y, D, Z)
     tsls_d2 = inference(tsls_d2)
 
@@ -204,15 +186,31 @@ function compute_results_part_d()
 end
 
 
+# Parts A and D:
+#---------------
+
+df = load_dataset()
+model_variables = define_variables()
+
+# Part A: Replicate cols (1) and (3) rows C3 and D2 of table 3 
+
+# Specification for ITT only uses "treat_full", meanwhile TOT instruments electrification status vs all subsidies
+instrument = model_variables[:instruments]
+treatment = [model_variables[:treatment]]
+covariates=[]
+append!(covariates,model_variables[:household])
+append!(covariates,model_variables[:comunity])
+itt_treatment = model_variables[:itt_treatment]
+
+x_vars = []
+x_vars = append!(x_vars, [itt_treatment])
+x_vars = append!(x_vars, covariates)
+
 results_a,_ = compute_results_part_a()
 results_d,_ = compute_results_part_d()
 
-
-CSV.write("Q1_PA_ITT_TOT.csv",  Tables.table(round.(results_a,sigdigits = 3)))
-CSV.write("Q1_PD_ITT_TOT.csv",  Tables.table(round.(results_d,sigdigits = 3)))
-
-
-
+# CSV.write("Q1_PA_ITT_TOT.csv",  Tables.table(round.(results_a,sigdigits = 3)))
+# CSV.write("Q1_PD_ITT_TOT.csv",  Tables.table(round.(results_d,sigdigits = 3)))
 
 
 # Part E: Estimate ATE, ATU, and ATT using MTE.
@@ -391,15 +389,13 @@ end
 # Implementation:
 ############################
 
-
 # Part E: Estimate ATE, ATU, and ATT using MTE.
 # - Restrict attention to parametric specifications of MTR
 # - 1st estimating the treatment selection equation in (2) as a probit model to obtain estimates of the propensity score
 # - 2nd modeling 𝐾(𝑝) as a polynomial in 𝑝 of degree k and estimating the outcome equation
 
-
 # E) No covariates:
-
+#------------------
 K = 2
 covariate_names = [:constant]
 support  = (0.01, 1)
@@ -420,11 +416,9 @@ ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
 ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
 
 
-# histogram(allSet[:propensity][allSet[:D][:].==1], fillalpha=0.2)
-# histogram!(allSet[:propensity][allSet[:D][:].==0],fillalpha=0.2)
-
 
 # F) With covariates:
+#--------------------
 K = 2
 covariate_names = vcat(covariates, [:constant])
 support  = (0.01, 1)
@@ -629,22 +623,18 @@ end
 # Get Bernstein poly basis terms and compute the gamma
 b_IV = -2.6
 b_TSLS = -3.5
-k = 4
+K = 10
 nMC = length(mte)
 u = rand(Uniform(),nMC)
 w1_IV, w0_IV, w1_TSLS, w0_TSLS = get_weights(df)
-Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
-gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, ω_att, .-ω_att)
-gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV, w0_IV)
-gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
 
-p_bounds = zeros(2, 2, 19)
-for k in 1:5
+p_bounds = zeros(2, 2, K)
+for k in 1:K
     # Get Bernstein poly basis terms and compute the gamma
     Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
     gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV, w0_IV)
     gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
-    gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, ω_att, .-ω_att)
+    gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, .-ω_att, ω_att)
 
     # Compute the parametric bounds
     for dec in (false,true)
@@ -666,13 +656,15 @@ end
 
 
 pyplot(size=(500,300), leg=true);
-_x = collect(1:k)
+_x = collect(1:K)
 
 # parametric bounds
 plot(_x, p_bounds[1,1,:], line = (:line, :line, 0.8, 1, :blue), label = "")
 plot!(_x, p_bounds[1,1,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
 plot!(_x, p_bounds[1,2,:], line = (:line, :line, 0.8, 1, :blue), label="")
 plot!(_x, p_bounds[1,2,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
+
+
 
 # # parametric bounds w/ decreasing MTRs
 # plot!(_x, p_bounds[2,1,:], line = (:line, :line, 0.8, 1, :orange), label="")
