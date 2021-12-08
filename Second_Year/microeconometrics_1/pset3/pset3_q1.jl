@@ -556,7 +556,12 @@ function get_weights(df)
     w1_TSLS = s_TSLS .* ind_1 # weight for d = 1
     w0_TSLS = s_TSLS .* (1 .- ind_1) # weight for d = 0
 
-    return w1_IV, w0_IV, w1_TSLS, w0_TSLS
+    # w0_ATT and w0ATU a la Mogstad and Torgovitsky:
+    w1_ATT = ind_1./mean(D)
+    w1_ATU  = (1 .- ind_1)/(1-mean(D))
+
+    return w1_IV, w0_IV, w1_TSLS, w0_TSLS, w1_ATT, w1_ATU
+
 end
 
 
@@ -620,21 +625,24 @@ end
 
 
 
+
 # Get Bernstein poly basis terms and compute the gamma
 b_IV = -2.6
 b_TSLS = -3.5
-K = 10
+K = 30
 nMC = length(mte)
 u = rand(Uniform(),nMC)
-w1_IV, w0_IV, w1_TSLS, w0_TSLS = get_weights(df)
+w1_IV, w0_IV, w1_TSLS, w0_TSLS, w1_ATT, w1_ATU = get_weights(df)
 
+
+# We have 3: ATU 
 p_bounds = zeros(2, 2, K)
 for k in 1:K
     # Get Bernstein poly basis terms and compute the gamma
     Bernstein = MyMethods.get_basis(u, "Bernstein", k, nothing)
     gamma_1IV, gamma_0IV = get_gamma(Bernstein, w1_IV, w0_IV)
     gamma_1TSLS, gamma_0TSLS = get_gamma(Bernstein, w1_TSLS, w0_TSLS)
-    gamma_1ATT, gamma_0ATT = get_gamma(Bernstein, .-ω_att, ω_att)
+    gamma_1ATU, gamma_0ATU = get_gamma(Bernstein, .-w1_ATU, w1_ATU)
 
     # Compute the parametric bounds
     for dec in (false,true)
@@ -642,27 +650,29 @@ for k in 1:K
         p_bounds[dec+1, 1, k] = get_bound(b_IV, b_TSLS,
                 gamma_1IV, gamma_0IV,
                 gamma_1TSLS, gamma_0TSLS,
-                gamma_1ATT, gamma_0ATT,
+                gamma_1ATU, gamma_0ATU,
                 sense = "Min", decreasing = dec)
 
         # upper bound
         p_bounds[dec+1, 2, k] = get_bound(b_IV, b_TSLS,
                 gamma_1IV, gamma_0IV,
                 gamma_1TSLS, gamma_0TSLS,
-                gamma_1ATT, gamma_0ATT,
+                gamma_1ATU, gamma_0ATU,
                 sense = "Max", decreasing = dec)
     end
 end
 
 
+# This is puzzling since previously I found that ATU was negative ...
 pyplot(size=(500,300), leg=true);
 _x = collect(1:K)
 
 # parametric bounds
-plot(_x, p_bounds[1,1,:], line = (:line, :line, 0.8, 1, :blue), label = "")
-plot!(_x, p_bounds[1,1,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
-plot!(_x, p_bounds[1,2,:], line = (:line, :line, 0.8, 1, :blue), label="")
-plot!(_x, p_bounds[1,2,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="")
+plot(_x, p_bounds[1,1,:], line = (:line, :line, 0.8, 1, :blue), xlabel = "Polynomial degree", ylabel = "Upper and Lower Bounds", label=nothing)
+plot!(_x, p_bounds[1,1,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label="ATU Bounds")
+plot!(_x, p_bounds[1,2,:], line = (:line, :line, 0.8, 1, :blue), label=nothing)
+plot!(_x, p_bounds[1,2,:], seriestype = :scatter, markershape=:circle, markersize=4, color=:blue, label=nothing)
+savefig("Q1_PH_ATU_bounds.pdf")
 
 
 
