@@ -148,7 +148,7 @@ function estimation(df, cl=false, vartype="hom")
     end
 
     # Test under the null of true (just for D_1)
-    results = inference(ols ,vartype, ones(size(ols.β)).*sin(1)) 
+    results = inference(ols ,vartype, ones(size(ols.β)).*(sin(-1)-sin(-4))) 
 
     return results.β, results.se, results.t, results.p, ols
 
@@ -207,18 +207,63 @@ function monte_carlo_ate(parameters, m = 12, α=0.025)
 end
 
 
+
+function wild_bootstrap(fit, indicator=5, β0 = sin(-1)-sin(-4))
+    
+    B = 200
+    _, _, t_realized, _ = inference(fit, "clust", β0)
+
+    # Unpack stuff
+    x = fit.x; y = fit.y ;cl = fit.cl; β=fit.β
+    clusters = unique(cl)
+
+    # Residual:
+    res = y - x*β 
+
+    # Random sign:    
+    function add_sign_shock(res_b)
+        for c in clusters
+            res_b[findall(cl.==c)] = res_b[findall(cl.==c)].*(rand((0, 2)) .- 1)
+        end
+        return res_b
+    end
+
+    t_list = zeros(B)
+    for b in 1:B
+        res_w = add_sign_shock(res)
+        y_w = x*β + res_w
+        fit_w = olsRegression(y_w, x, nothing, cl, false)
+        inference_w = inference(fit_w, "clust", β)
+        t_list[b] = inference_w.t[indicator]
+    end
+
+    pval_lower = mean(t_list .> t_realized[indicator])
+    pval_upper = mean(t_list .< t_realized[indicator])
+
+    return 2 .*  minimum([pval_lower,pval_upper])
+
+end
+
+
 function monte_carlo_size_test(parameters, cl = false, vartype="hom", m = 12, α=0.05)
     
-    parameters_placeholder = zeros(m,14)
-
     pval_placeholder = zeros(m,14)
 
     for mm in 1:m
-        parameters_placeholder[mm,:],
-        _,
-        _,
-        pval_placeholder[mm,:],
-        _ = estimation(data_generating_process(parameters,MersenneTwister()), cl, vartype) 
+        if vartype == "wild"
+            _,
+            _,
+            _,
+            _,
+            fit = estimation(data_generating_process(parameters,MersenneTwister()), true, vartype)
+            pval_placeholder[mm,5] = wild_bootstrap(fit,5,sin(-1)-sin(-4))
+        else
+            _,
+            _,
+            _,
+            pval_placeholder[mm,:],
+            _ = estimation(data_generating_process(parameters,MersenneTwister()), cl, vartype)
+        end
     end    
 
     # Apply test for all draw results:
@@ -312,7 +357,6 @@ size_results_3 = zeros((length(n_list),length(ρ_list)))
 
 size_results_4 = zeros((length(n_list),length(ρ_list)))
 
-# size_results_5 = zeros((length(n_list),length(ρ_list)))
 
 
 for ii in 1:length(n_list)
@@ -322,16 +366,16 @@ for ii in 1:length(n_list)
         true_parameters = define_parameters(n_list[ii], 5, -0.2, 0.5, 1, ρ_list[jj])
 
         # Specification 1
-        size_results_1[jj,ii] = monte_carlo_size_test(true_parameters, false, "hom", 2000);
+        size_results_1[jj,ii] = monte_carlo_size_test(true_parameters, false, "hom", 300);
 
         # Specification 2: HC(1), heteroskedasticity proof
-        size_results_2[jj,ii] = monte_carlo_size_test(true_parameters, false, "het", 2000);
+        size_results_2[jj,ii] = monte_carlo_size_test(true_parameters, false, "het", 300);
 
         # Specification 3: Cluster-robust asymptotic variance estimator,
-        size_results_3[jj,ii] = monte_carlo_size_test(true_parameters, true, "clust", 2000);
+        size_results_3[jj,ii] = monte_carlo_size_test(true_parameters, true, "clust", 300);
 
         # Specification 4: Wild bootstrap
-        size_results_4[jj,ii] = monte_carlo_size_test(true_parameters, true, "wild", 2000);
+        size_results_4[jj,ii] = monte_carlo_size_test(true_parameters, true, "wild", 300);
 
     end
 
@@ -351,8 +395,19 @@ results_table = DataFrame(  NObs            = [20,20,20, 50,50,50, 200,200,200],
 
 println(results_table)
 
+
 CSV.write("Q3_PE_size_test.csv",  round.(results_table,sigdigits = 3), writeheader=false)
 
+
+
+
+
+
+# _,
+# _,
+# _,
+# _,
+# fit = estimation(data_generating_process(true_parameters,MersenneTwister()), true, "clust")
 
 
 

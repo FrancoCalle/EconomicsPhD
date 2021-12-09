@@ -277,6 +277,8 @@ end
 
 
 
+
+
 function get_marginal_response(df, depvar, covariates, K, h_lo, h_up)
 
     propensity = get_propensity_score(df, covariates)
