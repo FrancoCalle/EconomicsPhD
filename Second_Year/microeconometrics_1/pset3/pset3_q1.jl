@@ -209,8 +209,8 @@ x_vars = append!(x_vars, covariates)
 results_a,_ = compute_results_part_a()
 results_d,_ = compute_results_part_d()
 
-# CSV.write("Q1_PA_ITT_TOT.csv",  Tables.table(round.(results_a,sigdigits = 3)))
-# CSV.write("Q1_PD_ITT_TOT.csv",  Tables.table(round.(results_d,sigdigits = 3)))
+CSV.write("Q1_PA_ITT_TOT.csv",  Tables.table(round.(results_a,sigdigits = 3)))
+CSV.write("Q1_PD_ITT_TOT.csv",  Tables.table(round.(results_d,sigdigits = 3)))
 
 
 # Part E: Estimate ATE, ATU, and ATT using MTE.
@@ -274,9 +274,6 @@ function unpack_parameters(parameters, nCovs)
     return β0, β10, α
 
 end
-
-
-
 
 
 function get_marginal_response(df, depvar, covariates, K, h_lo, h_up)
@@ -395,28 +392,6 @@ end
 # - Restrict attention to parametric specifications of MTR
 # - 1st estimating the treatment selection equation in (2) as a probit model to obtain estimates of the propensity score
 # - 2nd modeling 𝐾(𝑝) as a polynomial in 𝑝 of degree k and estimating the outcome equation
-
-# E) No covariates:
-#------------------
-K = 2
-covariate_names = [:constant]
-support  = (0.01, 1)
-
-# Hours worked
-depvar = model_variables[:depvar_c3]
-mte, mteall, πSet, allSet  = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) # ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
-ATE, ATU, ATT, ω_att, ω_atu = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
-# Get Bootstrapped Standard Errors:
-ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
-
-
-# Life Satisfaction
-depvar = model_variables[:depvar_d2]
-mte, mteall, πSet, allSet  = get_marginal_response(df, depvar, covariate_names, K, support[1], support[2]) # ATE, ATU, ATT = get_average_treatmet(mte,  πSet[:D], πSet[:propensity])
-ATE, ATU, ATT = get_average_treatmet(mteall, allSet[:D], allSet[:propensity])
-# Get Bootstrapped Standard Errors:
-ate_se, atu_se, att_se = bootstrap_se_model(df, depvar, covariate_names, support)
-
 
 
 # F) With covariates:

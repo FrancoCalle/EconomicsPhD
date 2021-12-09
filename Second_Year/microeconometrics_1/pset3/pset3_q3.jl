@@ -148,7 +148,7 @@ function estimation(df, cl=false, vartype="hom")
     end
 
     # Test under the null of true (just for D_1)
-    results = inference(ols ,vartype, ones(size(ols.β)).*(sin(-1)-sin(-4))) 
+    results = inference(ols ,vartype, ones(size(ols.β)).*sin(1)) 
 
     return results.β, results.se, results.t, results.p, ols
 
@@ -256,7 +256,7 @@ function monte_carlo_size_test(parameters, cl = false, vartype="hom", m = 12, α
             _,
             _,
             fit = estimation(data_generating_process(parameters,MersenneTwister()), true, vartype)
-            pval_placeholder[mm,5] = wild_bootstrap(fit,5,sin(-1)-sin(-4))
+            pval_placeholder[mm,5] = wild_bootstrap(fit,5,sin(1))
         else
             _,
             _,
