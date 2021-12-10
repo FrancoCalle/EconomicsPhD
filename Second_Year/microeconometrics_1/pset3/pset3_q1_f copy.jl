@@ -297,7 +297,6 @@ function discrete_mte_approximation_p4_nocovariates(df, depvar=:hours_worked, co
 
     ω_atu(p)  = (p/ (1-mean(D)))
 
-    # ω_prte(p) = ((p-E_prte)/ (E_prte-E_p))
 
     # For ATE:
     mte_approximation_ate(p) = mte_approximation(p) * ω_ate(p)
@@ -307,9 +306,6 @@ function discrete_mte_approximation_p4_nocovariates(df, depvar=:hours_worked, co
 
     # For ATU:
     mte_approximation_atu(p) = mte_approximation(p) * ω_atu(p)
-
-    # For PRTE:
-    # mte_approximation_prte(p) = mte_approximation(p) * ω_prte(p)
 
 
     # Compute common estimates:
@@ -367,15 +363,26 @@ end
 # Implementation:
 ############################
 
-# Part E: Estimate ATE, ATU, and ATT using MTE.
-# - Restrict attention to parametric specifications of MTR
-# - 1st estimating the treatment selection equation in (2) as a probit model to obtain estimates of the propensity score
-# - 2nd modeling 𝐾(𝑝) as a polynomial in 𝑝 of degree k and estimating the outcome equation
-
+# F) With covariates:
+#--------------------
 df = load_dataset()
-model_variables = define_variables()
-covariate_names = [:constant]
 
+model_variables = define_variables()
+
+
+#Drop missings:
+df_with_covs = df[:,vcat([model_variables[:depvar_c3], model_variables[:depvar_d2]], 
+                            [model_variables[:treatment]], 
+                            covariate_names,
+                            model_variables[:instruments])]
+
+df_with_covs = df_with_covs[all.(!ismissing, eachrow(df_with_covs)), :]
+
+
+covariates=[]
+append!(covariates,model_variables[:household])
+append!(covariates,model_variables[:comunity])
+covariate_names = vcat(covariates, [:constant])
 
 
 # E) No covariates:
@@ -424,32 +431,6 @@ TreatmentEffects[1,8], TreatmentEffects[2,8], TreatmentEffects[3,8], TreatmentEf
 
 
 CSV.write("Q1_PE_life_satisfaction.csv",  Tables.table(round.(TreatmentEffects,sigdigits = 3)))
-
-
-
-
-# G) Now consider policy where effective connection price is changed to $200
-# - Construct estimate of per person policy relevant treatment relative to status quo
-# - use two outcomes in (a) and parametric, point identified specifications of mtr as in e.
-
-# Small tweak, instead of dichotomous variables I'll transform it in effective connection price:
-# - MTE will remain the same, we will just change propensity score and compute PRTE
-
-# Prte Experiment
-probit_prte = glm(@formula(connected ~ effective_connection_price), df, Binomial(), ProbitLink())
-df_pol = copy(df)
-df_pol[:,:effective_connection_price] .= 200
-E_prte = mean(predict(probit_prte,df_pol))
-
-E_statu_quo = mean(df[:,:connected][df[:,:effective_connection_price].==398])
-
-#Note: I defaulted E_prte value in the previous functions to automatically get the PRTE in all polinomial specifications
-# That's why they appear in the tables
-
-
-
-
-
 
 
 

@@ -285,7 +285,7 @@ b_IV = 1.95
 # b_TSLS = -3.5
 K = 30
 nMC = size(df,1)
-u = collect(1:nMC)./(nMC+1)
+u = rand(Uniform(),nMC)
 w1_IV, w0_IV, w1_TSLS, w0_TSLS, w1_ATT, w1_ATU = get_weights(df)
 
 # We have 3: ATU 
