@@ -276,10 +276,48 @@ mean(p_new, dims=2)
 mean(shares_new, dims=2)
 
 
-
 # Part 5:
 
+function profit_maximization(p, mc, s)
+
+    π = (p .- mc).*s
+
+    return π
+
+end
+
+function welfare(p, XX, ξ, s, β)
+
+    utility = β[1].*p .+ β[2].*XX .+ β[3] .+ ξ
+    utility = utility .* s
+    total_welfare = sum(utility .* s, dims = 1)
+
+    return total_welfare
+
+end
+
+profit_0 = profit_maximization(reshape(p,J,M), mc_jm, reshape(s_jt,J,M))
+
+profit_1 = profit_maximization(p_new, mc_jm[2:end,:], shares_new)
+
+increase_profits = (profit_1 .- profit_0[2:end,:])./profit_0[2:end,:]
+
+mean(increase_profits, dims=2)
 
 
+# Consumer welfare:
+total_welfare0 = welfare(reshape(p, J,M), XX, ξ, reshape(s_jt, J,M), β)
+
+total_welfare1 = welfare(p_new, XX[2:end,:], ξ[2:end,:], shares_new, β)
+
+R = abs(min(minimum(total_welfare1), minimum(total_welfare0)))
+
+increase_welfare = ((total_welfare1.+R) .- (total_welfare0.+R))./(total_welfare0.+R)
+
+mean(increase_welfare, dims=2)
+
+histogram(increase_welfare[:], x_lims=(-1,1))
 
 
+mean(reshape(p,J,M), dims=2)
+mean(p_new, dims=2)
