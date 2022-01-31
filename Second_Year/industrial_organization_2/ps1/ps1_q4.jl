@@ -171,7 +171,7 @@ dataset = DataFrame(CSV.File("ps1_ex4.csv"));
 s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
 
 # Generate Random Mean Utilities ...
-nDrawsVi = 10
+nDrawsVi = 20
 param_init = abs.(rand(5))
 param_init[1] = -param_init[1]
 vi = [rand(MultivariateNormal([0,0], Matrix(I,2,2)), nDrawsVi) for ii = 1:M];
@@ -183,6 +183,7 @@ result = optimize(gmm_objective, param_init, NelderMead(), Optim.Options(outer_i
                     show_every=100))
 
 params_hat = Optim.minimizer(result)
+
 # Potential Candidate:
 params_candidate1 = [
     -0.18472568371716075
@@ -251,7 +252,10 @@ function get_elasticities(α, p, pr_jtn, s_jt; nDrawsVi=nDrawsVi)
     return η_jkm
 end
 
-α = 0.18472568371716075
+
+# Obtain elasticities:
+
+α = -params_candidate1[1]
 
 δ_jt = inner_loop(Γ, rand(M*J))
 
