@@ -24,7 +24,7 @@ using Random
 using Plots
 using Base.Threads
 using PyCall
-pyblp = pyimport("pyblp")
+# pyblp = pyimport("pyblp")
 
 # Excercise 2
 
