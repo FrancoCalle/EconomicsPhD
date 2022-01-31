@@ -273,8 +273,9 @@ end
 
 mean(reshape(p, J,M ), dims=2)
 
-round.(mean(p_new, dims=2), digits= 5)
-round.(mean(shares_new, dims=2), digits= 5)
+# Average prices and shares after simulation
+print("Average Prices: ", round.(mean(p_new, dims=2), digits= 5))
+print("Average Shares: ",round.(mean(shares_new, dims=2), digits= 5))
 
 
 # Part 5:
@@ -303,7 +304,8 @@ profit_1 = profit_maximization(p_new, mc_jm[2:end,:], shares_new)
 
 increase_profits = (profit_1 .- profit_0[2:end,:])./profit_0[2:end,:]
 
-round.(mean(increase_profits, dims=2), digits=5)
+
+print("Average Increase in Profits: ", round.(mean(increase_profits, dims=2), digits=5))
 
 
 # Consumer welfare:
@@ -316,10 +318,8 @@ R = abs(min(minimum(total_welfare1), minimum(total_welfare0)))
 
 increase_welfare = ((total_welfare1.+R) .- (total_welfare0.+R))./(total_welfare0.+R)
 
-mean(increase_welfare, dims=2)
+print("Average Welfare Increase: ", mean(increase_welfare, dims=2))
 
 histogram(increase_welfare[:], x_lims=(-1,1))
 
 
-mean(reshape(p,J,M), dims=2)
-mean(p_new, dims=2)
