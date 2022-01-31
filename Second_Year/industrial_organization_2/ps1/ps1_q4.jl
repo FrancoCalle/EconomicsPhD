@@ -22,7 +22,9 @@ using CSV
 using Optim
 using Random
 using Plots
-
+using Base.Threads
+using PyCall
+pyblp = pyimport("pyblp")
 
 # Excercise 2
 
@@ -52,7 +54,7 @@ function blpShares(δ_jt, m, p, x, Γ_νi)
 
     s_blp_jt = zeros(J*M)
 
-    for ii = 1:M  # obtain shares conditional on each market
+    @threads for ii = 1:M  # obtain shares conditional on each market
         
         u_jn = δ_jt[m .== ii] .+ X[m .== ii,:]*Γ_νi[ii]
     
@@ -96,35 +98,8 @@ function inner_loop(Γ, δ_jt_lag; # Changing
 end
 
 
-# function tsls_regression(y, p, z, x=nothing, intercept=true)
 
-#     n = size(z)[1]
-    
-#     z = hcat(z,x)
-#     d = hcat(p,x)
-
-#     if intercept==true
-#         z = hcat(z,ones(n,1))
-#         d = hcat(d,ones(n,1))
-#     end
-
-    
-#     _, R_Z = qr(z)
-    
-#     ZZ_inv = inv(cholesky(R_Z' * R_Z))
-    
-#     P_Z = z * ZZ_inv * z'
-    
-#     β = inv(d' * P_Z * d) * d' * P_Z * y
-    
-#     Π = z\d
-    
-#     return β, Π, d
-
-# end
-
-
-function get_elasticities(α, p, s_jt)
+function get_elasticities(α, p, s_jt, vi)
 
     S = reshape(s_jt, J, M)
     P = reshape(p, J, M)
@@ -196,7 +171,7 @@ dataset = DataFrame(CSV.File("ps1_ex4.csv"));
 s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
 
 # Generate Random Mean Utilities ...
-nDrawsVi = 30
+nDrawsVi = 10
 param_init = abs.(rand(5))
 param_init[1] = -param_init[1]
 vi = [rand(MultivariateNormal([0,0], Matrix(I,2,2)), nDrawsVi) for ii = 1:M];
@@ -210,16 +185,84 @@ result = optimize(gmm_objective, param_init, NelderMead(), Optim.Options(outer_i
 params_hat = Optim.minimizer(result)
 # Potential Candidate:
 params_candidate1 = [
- -0.08572118338826021,
-  1.100098348035126,
-  1.0845062581028757,
- -0.06370388916585987,
- -0.05636379371070599
+    -0.18472568371716075
+    2.1385463127358983
+    -2.0019003342751214
+    -0.04381409409480813
+    0.14376694750798633
 ]
 
 #Compute Ealsticities:
-η_jkm = get_elasticities(params_hat[1], p, s_jt)
+
+function blpShares_nu(δ_jt, m, p, x, Γ_νi)
+
+    nDrawsVi = size(Γ_νi[1],2)  
+
+    M = maximum(m)
+
+    X = hcat(p, x)
+
+    s_blp_jtn = zeros(J*M, nDrawsVi)
+
+    @threads for ii = 1:M  # obtain shares conditional on each market
+        
+        u_jn = δ_jt[m .== ii] .+ X[m .== ii,:]*Γ_νi[ii]
+    
+        pr_jn = exp.(u_jn)./(1 .+ sum(exp.(u_jn), dims=1))
+                
+        s_blp_jtn[m .== ii,:] = pr_jn
+    end
+
+   
+    return s_blp_jtn
+end
+
+
+function get_elasticities(α, p, pr_jtn, s_jt; nDrawsVi=nDrawsVi)
+
+    P = reshape(p, J, M)
+
+    S = reshape(s_jt, J, M)
+
+    η_jkm = zeros(J,J,M)
+
+
+    for n = 1:nDrawsVi
+
+        Pr_vi = reshape(pr_jtn[:,n], J, M)
+
+        for mm = 1:M
+            for jj = 1:J
+                for kk = 1:J
+                    if jj == kk
+
+                        η_jkm[jj,kk,mm] +=  (-P[jj,mm]/S[jj,mm]) * (α .* Pr_vi[jj,mm] .* (1 - Pr_vi[jj,mm]))./nDrawsVi 
+
+                    else
+
+                        η_jkm[jj,kk,mm] += (P[kk,mm]/S[jj,mm]) * (α .* Pr_vi[jj,mm] .* Pr_vi[kk,mm])./nDrawsVi
+
+                    end
+                end
+            end
+        end
+    end
+
+    return η_jkm
+end
+
+α = 0.18472568371716075
+
+δ_jt = inner_loop(Γ, rand(M*J))
+
+pr_jtn= blpShares_nu(δ_jt, m, p, x, Γ_νi)
+
+η_jkm = get_elasticities(α, p, pr_jtn, s_jt)
+
 η_jk = zeros(J,J)
 for mm = 1:M η_jk += η_jkm[:,:,mm]./M end # Average across markets:
+
+round.(η_jk, digits= 5)
+
 
 
