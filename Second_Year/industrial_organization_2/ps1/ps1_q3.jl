@@ -271,9 +271,10 @@ for mm in 1:M
 end
 
 
+mean(reshape(p, J,M ), dims=2)
 
-mean(p_new, dims=2)
-mean(shares_new, dims=2)
+round.(mean(p_new, dims=2), digits= 5)
+round.(mean(shares_new, dims=2), digits= 5)
 
 
 # Part 5:
@@ -302,10 +303,11 @@ profit_1 = profit_maximization(p_new, mc_jm[2:end,:], shares_new)
 
 increase_profits = (profit_1 .- profit_0[2:end,:])./profit_0[2:end,:]
 
-mean(increase_profits, dims=2)
+round.(mean(increase_profits, dims=2), digits=5)
 
 
 # Consumer welfare:
+
 total_welfare0 = welfare(reshape(p, J,M), XX, ξ, reshape(s_jt, J,M), β)
 
 total_welfare1 = welfare(p_new, XX[2:end,:], ξ[2:end,:], shares_new, β)
