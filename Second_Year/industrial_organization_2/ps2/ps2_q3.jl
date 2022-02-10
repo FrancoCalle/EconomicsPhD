@@ -15,6 +15,15 @@ using Random
 using Plots
 # using Base.Threads
 
+struct ModelData
+    X::Array  # Mileage Time Series
+    D::Array  # Decision Time Series
+    S_idx::Array # State index of Mileage
+    y_discrete::Array # Average Mileage in each State
+    bin_edges::Array # Bin Edges
+    T::Int  # Number of periods
+    nStates::Int # Number of States
+end
 
 
 function get_decision(mileage)
@@ -80,6 +89,8 @@ function generate_transition_matrix(mileage, d_t, c; T=5000, K = 10)
 end
 
 
+# Zurcher:
+
 function flow_utility(x , d ; θ_1=.3, θ_2=.7, θ_3 = 44)
 
     if d == 0
@@ -94,15 +105,21 @@ end
 
 
 
-function obtain_continuation_value(y_discrete; K=K)
+function obtain_continuation_value(y_discrete; K=K, θ_1=.3, θ_2=.6, θ_3= 44)
 
     β=0.98
 
     U = zeros(K, 2)
     
-    U[:,1] = flow_utility.(y_discrete,0)
+    U[:,1] = flow_utility.(y_discrete, 0; 
+                            θ_1=θ_1, 
+                            θ_2=θ_2, 
+                            θ_3=θ_3)
     
-    U[:,2] = flow_utility.(y_discrete,1)
+    U[:,2] = flow_utility.(y_discrete, 1; 
+                            θ_1=θ_1, 
+                            θ_2=θ_2, 
+                            θ_3=θ_3)
 
     EV = randn(K,2)
     
@@ -128,7 +145,12 @@ function obtain_continuation_value(y_discrete; K=K)
 end
 
 
-function choice_probability(x, d, m_state; EV=EV, β=0.98)
+function choice_probability(x, d, m_state; 
+                                    EV=EV, 
+                                    β=0.98, 
+                                    θ_1 = θ_1, 
+                                    θ_2 = θ_2, 
+                                    θ_3 = θ_3)
 
     d = Integer(d)
 
@@ -149,18 +171,40 @@ function choice_probability(x, d, m_state; EV=EV, β=0.98)
 end
 
 
-function loglikelihood(; x,d, m_state, T=T, K=K, Π = [Π0, Π1], β=0.98, y_discrete = y_discrete)
-    
-    EV = obtain_continuation_value(y_discrete; K=K)
+function loglikelihood(θ_1, θ_2, θ_3; 
+                            md, 
+                            Π = [Π0, Π1], 
+                            β=0.98, 
+                            y_discrete = y_discrete)
+
+    # Unpack Data and Hyperparameters    
+
+    x = md.X
+    d = md.D
+    m_state = md.S_idx
+    y_discrete = md.y_discrete
+    T = md.T
+    K = md.nStates
+
+    EV = obtain_continuation_value(y_discrete; 
+                                    K = K, 
+                                    θ_1 = θ_1, 
+                                    θ_2 = θ_2, 
+                                    θ_3 = θ_3)
 
     logL_t = zeros(T,1)
 
-    for tt = 1:T
+    for tt = 2:T
     
-        π_t = Π[d[tt]+1][x[tt-1],x[tt]]
+        π_t = Π[d[tt]+1][m_state[tt-1],m_state[tt]]
     
-        pr_t = choice_probability(x[tt], d[tt], m_state[tt]; EV=EV)
-    
+        pr_t = choice_probability(x[tt], d[tt], m_state[tt]; 
+                                    EV=EV, 
+                                    β=0.98, 
+                                    θ_1 = θ_1, 
+                                    θ_2 = θ_2, 
+                                    θ_3 = θ_3) 
+
         logL_t[tt] = log(pr_t * π_t)
     
     end
@@ -187,8 +231,6 @@ K = 10
 
 bin_edges = Array(LinRange(minimum(mileage),maximum(mileage),K+1)); bin_edges[end]= bin_edges[end] +1 
 
-x = 100
-
 # Transition probabilities:
 
 mileage_state = classify.(mileage)
@@ -197,19 +239,50 @@ y_discrete = [mean(mileage[mileage_state.==ms]) for ms = 1:K]
 
 Π0, Π1 = generate_transition_matrix(mileage, d_t, bin_edges; T, K)
 
+md = ModelData(
+    mileage,
+    Int.(d_t),
+    mileage_state,
+    y_discrete,
+    bin_edges,
+    T,
+    K
+)
+
+
+
 # Compute contraction:
 
-EV = obtain_continuation_value(y_discrete; K=K)
+θ_1_init = .3 
 
-kk = 100
-x = mileage[kk]
-d = d_t[kk]
-m_state = mileage_state[kk]
+θ_2_init = .6
+
+θ_3_init = 44
+
+θ_1=.3; θ_2=.6; θ_3=44
+
+param_init = zeros(3); param_init[1] = θ_1_init; param_init[2] = θ_2_init; param_init[3] = θ_3_init
 
 
+logL = loglikelihood(θ_1_init, θ_2_init, θ_3_init; 
+                            md, 
+                            Π = [Π0, Π1], 
+                            β = 0.98, 
+                            y_discrete = y_discrete)
 
 
-histogram(pr_i, bins= 20)
+func_anon(params) = loglikelihood(params[1], params[2], params[3]; 
+                                    md, 
+                                    Π = [Π0, Π1], 
+                                    β = 0.98, 
+                                    y_discrete = y_discrete)
+
+result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 1500,
+                    iterations=100, # iterations=10000,
+                    show_trace=true,
+                    show_every=100))
+
+Optim.minimizer(result)
 
 
 # Check what is the regenerative property.
