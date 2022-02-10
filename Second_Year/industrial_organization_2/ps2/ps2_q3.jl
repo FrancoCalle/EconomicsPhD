@@ -149,9 +149,15 @@ function obtain_continuation_value()
     return EV
 end
 
+# Check what is the regenerative property.
 
-
-
+# 5. Derive the conditional choice probabilities using EV (x, d) and θ.
+# 6. Reduce the state space of EV using the regenerative property.
+# 7. Rewrite the fixed point equation as a matrix equation.
+# 8. Write a function that solves the fixed-point equation using Rust’s algorithm.
+# 9. Write a function that computes the likelihood of the sample for any parameter
+# θ.
+# 10. Estimate the model parameters θ. Use β = .999
 
 
 
