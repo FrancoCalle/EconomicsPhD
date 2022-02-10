@@ -13,7 +13,7 @@ using CSV
 using Optim
 using Random
 using Plots
-# using Base.Threads
+
 
 struct ModelData
     X::Array  # Mileage Time Series
@@ -135,7 +135,7 @@ function obtain_continuation_value(y_discrete; K=K, θ_1=.3, θ_2=.6, θ_3= 44)
         
         tol = maximum(abs.(EV_next.-EV))
         
-        print(tol, "\n")
+        # print(tol, "\n")
         
         EV = copy(EV_next) # Important, copy, not input right away...
 
@@ -270,6 +270,7 @@ logL = loglikelihood(θ_1_init, θ_2_init, θ_3_init;
                             β = 0.98, 
                             y_discrete = y_discrete)
 
+# Compute Optimization Process: NFP_NLP
 
 func_anon(params) = loglikelihood(params[1], params[2], params[3]; 
                                     md, 
@@ -278,7 +279,7 @@ func_anon(params) = loglikelihood(params[1], params[2], params[3];
                                     y_discrete = y_discrete)
 
 result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 1500,
-                    iterations=100, # iterations=10000,
+                    iterations= 10000,
                     show_trace=true,
                     show_every=100))
 
