@@ -257,6 +257,12 @@ end
 
 α = -params_candidate1[1]
 
+Γ = zeros(2,2);
+Γ[1,1] = params_candidate1[3];
+Γ[2,1] = params_candidate1[4];
+Γ[2,2] = params_candidate1[5];
+Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
+
 δ_jt = inner_loop(Γ, rand(M*J))
 
 pr_jtn= blpShares_nu(δ_jt, m, p, x, Γ_νi)
@@ -266,7 +272,17 @@ pr_jtn= blpShares_nu(δ_jt, m, p, x, Γ_νi)
 η_jk = zeros(J,J)
 for mm = 1:M η_jk += η_jkm[:,:,mm]./M end # Average across markets:
 
-round.(η_jk, digits= 5)
+round.(η_jk, digits= 6)
 
+
+
+# Question 4, avg prices and quality...
+
+
+s_jt , p, x , z, m, j, M, J
+
+print("Prices:", mean(reshape(p,J,M), dims=2))
+print("Quality:", mean(reshape(x,J,M), dims=2))
+print("Shares", mean(reshape(s_jt,J,M), dims=2))
 
 
