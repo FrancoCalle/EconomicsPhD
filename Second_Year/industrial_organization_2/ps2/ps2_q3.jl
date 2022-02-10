@@ -32,7 +32,6 @@ function get_decision(mileage)
 end
 
 
-
 function classify(x; c=bin_edges, K=10)
     
     s = 0
@@ -93,6 +92,11 @@ function flow_utility(x , d ; θ_1=.3, θ_2=.7, θ_3 = .011)
 end
 
 
+
+
+
+
+
 # Execute code:...
 
 mileage_data = DataFrame(CSV.File("ps2_ex3.csv"));
@@ -117,32 +121,37 @@ x = 100
 
 # Compute contraction:
 
-β=0.98
-x = 100
-mileage_state = classify.(mileage; K = K)
-y_discrete = [mean(mileage[mileage_state.==ms]) for ms = 1:K]
+function obtain_continuation_value()
 
-U = zeros(K, 2)
-U[:,1] = flow_utility.(y_discrete,0)
-U[:,2] = flow_utility.(y_discrete,1)
+    β=0.98
+    mileage_state = classify.(mileage; K = K)
+    y_discrete = [mean(mileage[mileage_state.==ms]) for ms = 1:K]
 
-EV = randn(K,2)
-EV_next = zeros(K,2)
+    U = zeros(K, 2)
+    U[:,1] = flow_utility.(y_discrete,0)
+    U[:,2] = flow_utility.(y_discrete,1)
 
-tol = 10
+    EV = randn(K,2)
+    EV_next = zeros(K,2)
 
-while tol > 10^-15
+    tol = 10
 
-    EV_next[:,1] = log.(exp.(U[:,1] .+ β .* EV[:,1]) .+ exp.(U[:,2] .+ β .* EV[:,2]))' * Π0'
-    EV_next[:,2] = log.(exp.(U[:,1] .+ β .* EV[:,1]) .+ exp.(U[:,2] .+ β .* EV[:,2]))' * Π1'
-    tol = maximum(abs.(EV_next.-EV))
-    print(tol, "\n")
-    EV = copy(EV_next) # Important, copy, not input right away...
+    while tol > 10^-15
 
+        EV_next[:,1] = log.(exp.(U[:,1] .+ β .* EV[:,1]) .+ exp.(U[:,2] .+ β .* EV[:,2]))' * Π0'
+        EV_next[:,2] = log.(exp.(U[:,1] .+ β .* EV[:,1]) .+ exp.(U[:,2] .+ β .* EV[:,2]))' * Π1'
+        tol = maximum(abs.(EV_next.-EV))
+        print(tol, "\n")
+        EV = copy(EV_next) # Important, copy, not input right away...
+
+    end
+
+    return EV
 end
 
 
-EV_next
+
+
 
 
 
