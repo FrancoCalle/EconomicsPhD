@@ -229,7 +229,7 @@ T = size(mileage,1)
 
 K = 10
 
-bin_edges = Array(LinRange(minimum(mileage),maximum(mileage),K+1)); bin_edges[end]= bin_edges[end] +1 
+bin_edges = Array(LinRange(minimum(mileage),maximum(mileage),K+1)); bin_edges[end]= bin_edges[end] + 1 
 
 # Transition probabilities:
 
@@ -284,17 +284,6 @@ result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_itera
                     show_every=100))
 
 Optim.minimizer(result)
-
-
-# Check what is the regenerative property.
-
-# 5. Derive the conditional choice probabilities using EV (x, d) and θ.
-# 6. Reduce the state space of EV using the regenerative property.
-# 7. Rewrite the fixed point equation as a matrix equation.
-# 8. Write a function that solves the fixed-point equation using Rust’s algorithm.
-# 9. Write a function that computes the likelihood of the sample for any parameter
-# θ.
-# 10. Estimate the model parameters θ. Use β = .999
 
 
 
