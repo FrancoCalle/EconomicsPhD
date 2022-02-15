@@ -122,21 +122,6 @@ function generate_nash_equilibrium(md, mp)
 end
 
 
-mp = ModelParameters(1,2,6,3,0.8)
-
-T = 10; K = 30;
-X = exp.(rand(Normal(0,1), T));
-Z = rand(Normal(0,1), K , T);
-Firm = vcat([collect(1:30) for ii = 1:T]...);
-Market = vcat([Int.(ones(K)*ii) for ii = 1:T]...);
-
-
-md = ModelData(T, K, X, Z, Firm, Market);
-Π, I, N = generate_nash_equilibrium(md, mp)
-
-estimationData = EstimationData(T, K, X, Z, I, N, Firm, Market)
-
-
 function model_prediction(estimationData, mp; S=20)
 
     # Unpack Data:
@@ -168,6 +153,71 @@ function model_prediction(estimationData, mp; S=20)
     end
 
     return I_expected, N_expected
-    
+   
 end
+
+function gmm_objective(I_expected, N_expected, I, N, parameters, estimationData)
+
+    #Unpack data:
+    T = estimationData.T; 
+    K = estimationData.K; 
+    X = estimationData.X; 
+    Z = estimationData.Z;
+    I = estimationData.I;
+    N = estimationData.N';
+    Market= estimationData.Market
+
+    #Unpack parameters:
+    mp0 = ModelParameters(parameters[1],
+                            parameters[2],
+                            parameters[3],
+                            parameters[4],
+                            parameters[5])
+
+
+    I_expected, N_expected = model_prediction(estimationData, mp0; S=20)
+
+    ξ_micro = I .- I_expected
+
+    ξ_macro = N .- N_expected
+
+    obj_micro = Z[:]' * ξ_micro[:] * ξ_micro[:]' * Z[:]
+
+    obj_macro = X[:]' * ξ_macro[:] * ξ_macro[:]' * X[:]
+
+    obj_total = obj_micro + obj_total 
+
+    return obj_total
+
+end
+
+
+# Execute code:
+
+mp = ModelParameters(1,2,6,3,0.8)
+
+T = 10; K = 30;
+X = exp.(rand(Normal(0,1), T));
+Z = rand(Normal(0,1), K , T);
+Firm = vcat([collect(1:30) for ii = 1:T]...);
+Market = vcat([Int.(ones(K)*ii) for ii = 1:T]...);
+
+
+md = ModelData(T, K, X, Z, Firm, Market);
+Π, I, N = generate_nash_equilibrium(md, mp)
+
+estimationData = EstimationData(T, K, X, Z, I, N, Firm, Market)
+
+
+
+result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 1500,
+                    iterations= 10000,
+                    show_trace=true,
+                    show_every=100))
+
+Optim.minimizer(result)
+
+
+
+
 
