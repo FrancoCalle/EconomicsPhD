@@ -71,7 +71,7 @@ function get_n_entrants(X, Z, Φ; mp , T, K)
     
     for tt in 1:T
 
-        n_t = 0
+        n_t = 1
         
         x_t = X[tt] # Market level characteristic
                 
@@ -122,7 +122,7 @@ function generate_nash_equilibrium(md, mp)
 end
 
 
-function model_prediction(estimationData, mp; S=20)
+function model_prediction(estimationData, mp; Eta_S, Epsilon_S, S=20)
 
     # Unpack Data:
     T = estimationData.T; 
@@ -135,10 +135,6 @@ function model_prediction(estimationData, mp; S=20)
 
     # Unpack Parameters:
     γ = mp.ggamma; β = mp.β; α = mp.aalpha; δ = mp.δ; ρ = mp.rho
-
-    # S draws:
-    Eta_S = [rand(Normal(0,1), T, S) for ss = 1:S];
-    Epsilon_S = [rand(Normal(0,1), T, K) for ss in 1:S];
 
     # S Simulations
     I_expected = zeros(K,T)
@@ -156,26 +152,32 @@ function model_prediction(estimationData, mp; S=20)
    
 end
 
-function gmm_objective(I_expected, N_expected, I, N, parameters, estimationData)
+function gmm_objective(parameters, I, N, estimationData; Eta_S, Epsilon_S, S)
 
     #Unpack data:
-    T = estimationData.T; 
-    K = estimationData.K; 
+    T = estimationData.T;
+    K = estimationData.K;
     X = estimationData.X; 
     Z = estimationData.Z;
     I = estimationData.I;
     N = estimationData.N';
-    Market= estimationData.Market
+    Market= estimationData.Market;
 
     #Unpack parameters:
+    # mp0 = ModelParameters(parameters[1],
+    #                         parameters[2],
+    #                         parameters[3],
+    #                         parameters[4],
+    #                         parameters[5])
+
+
     mp0 = ModelParameters(parameters[1],
                             parameters[2],
                             parameters[3],
                             parameters[4],
-                            parameters[5])
+                            .8)
 
-
-    I_expected, N_expected = model_prediction(estimationData, mp0; S=20)
+    I_expected, N_expected = model_prediction(estimationData, mp0; Eta_S, Epsilon_S, S)
 
     ξ_micro = I .- I_expected
 
@@ -185,7 +187,7 @@ function gmm_objective(I_expected, N_expected, I, N, parameters, estimationData)
 
     obj_macro = X[:]' * ξ_macro[:] * ξ_macro[:]' * X[:]
 
-    obj_total = obj_micro + obj_total 
+    obj_total = obj_micro + obj_macro 
 
     return obj_total
 
@@ -193,7 +195,6 @@ end
 
 
 # Execute code:
-
 mp = ModelParameters(1,2,6,3,0.8)
 
 T = 10; K = 30;
@@ -202,22 +203,29 @@ Z = rand(Normal(0,1), K , T);
 Firm = vcat([collect(1:30) for ii = 1:T]...);
 Market = vcat([Int.(ones(K)*ii) for ii = 1:T]...);
 
-
 md = ModelData(T, K, X, Z, Firm, Market);
 Π, I, N = generate_nash_equilibrium(md, mp)
 
 estimationData = EstimationData(T, K, X, Z, I, N, Firm, Market)
 
+# S draws:
+S = 200
+Eta_S = [rand(Normal(0,1), T, S) for ss = 1:S];
+Epsilon_S = [rand(Normal(0,1), T, K) for ss in 1:S];
+
+# Define Anonymous Function
+func_anon(params) =  gmm_objective(params, I, N, estimationData; Eta_S, Epsilon_S, S)
 
 
-result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 1500,
+# Proceed to parameter estimation:
+param_init = [1,2,6,3,0.8] .+ rand(5) 
+result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 10000,
                     iterations= 10000,
                     show_trace=true,
                     show_every=100))
 
 Optim.minimizer(result)
-
-
-
+scatter([1,2,6,3,0.8],Optim.minimizer(result))
+plot!(1:7,1:7)
 
 
