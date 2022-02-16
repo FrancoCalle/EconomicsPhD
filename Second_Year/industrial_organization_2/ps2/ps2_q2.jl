@@ -175,7 +175,9 @@ function gmm_objective(parameters, I, N, estimationData; Eta_S, Epsilon_S, S)
                             parameters[2],
                             parameters[3],
                             parameters[4],
-                            .8)
+                            1/(1+exp(parameters[5])))
+
+    
 
     I_expected, N_expected = model_prediction(estimationData, mp0; Eta_S, Epsilon_S, S)
 
@@ -196,8 +198,11 @@ end
 
 # Execute code:
 #--------------
+
+# Set model Parameters
 mp = ModelParameters(1,2,6,3,0.8)
 
+# Set model Data for DGP 
 T = 10; K = 30;
 X = exp.(rand(Normal(0,1), T));
 Z = rand(Normal(0,1), K , T);
@@ -205,12 +210,18 @@ Firm = vcat([collect(1:30) for ii = 1:T]...);
 Market = vcat([Int.(ones(K)*ii) for ii = 1:T]...);
 
 md = ModelData(T, K, X, Z, Firm, Market);
+
+# Compute DGP and obtain nash equilibrium
 Π, I, N = generate_nash_equilibrium(md, mp)
 
+# Gather all variables in data struct
 estimationData = EstimationData(T, K, X, Z, I, N, Firm, Market)
 
-# S draws:
-S = 200
+# Estimation:
+#-----------
+
+# Get unobservable draws to feed the estimation procedure:
+S = 100
 Eta_S = [rand(Normal(0,1), T, S) for ss = 1:S];
 Epsilon_S = [rand(Normal(0,1), T, K) for ss in 1:S];
 
@@ -225,8 +236,21 @@ result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_itera
                     show_trace=true,
                     show_every=100))
 
-Optim.minimizer(result)
+param_hat = Optim.minimizer(result)
+param_hat[end] = 1/(1+exp(param_hat[end]))
+
 scatter([1,2,6,3,0.8],Optim.minimizer(result))
 plot!(1:7,1:7)
+
+
+# TODO: Compute grid stuff...
+
+
+
+# TODO: Report results for different initial conditions...
+
+
+
+# TODO: Add additional constraint to restrict values of \rho be less that 1 in absolute value...
 
 
