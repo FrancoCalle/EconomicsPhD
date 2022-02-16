@@ -239,7 +239,7 @@ result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_itera
 param_hat = Optim.minimizer(result)
 param_hat[end] = 1/(1+exp(param_hat[end]))
 
-scatter([1,2,6,3,0.8],Optim.minimizer(result))
+scatter([1,2,6,3,0.8],param_hat)
 plot!(1:7,1:7)
 
 
