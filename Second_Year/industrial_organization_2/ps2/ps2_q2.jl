@@ -163,13 +163,6 @@ function gmm_objective(parameters, I, N, estimationData; Eta_S, Epsilon_S, S)
     N = estimationData.N';
     Market= estimationData.Market;
 
-    #Unpack parameters:
-    # mp0 = ModelParameters(parameters[1],
-    #                         parameters[2],
-    #                         parameters[3],
-    #                         parameters[4],
-    #                         parameters[5])
-
 
     mp0 = ModelParameters(parameters[1],
                             parameters[2],
@@ -243,9 +236,71 @@ scatter([1,2,6,3,0.8],param_hat)
 plot!(1:7,1:7)
 
 
-# TODO: Compute grid stuff...
+# Compute grid for α:
+α_list = Array(-5:0.01:5)
+obj_list_alpha = zeros(size(α_list,1))
+for ii in 1:size(α_list,1)
+    param_true = [α_list[ii],2,6,3,0.8]
+    obj_list_alpha[ii] = gmm_objective(param_true, I, N, estimationData; Eta_S, Epsilon_S, S)
+end
+
+plot(α_list, obj_list_alpha, linewidth = 5, linecolor=:red, label="GMM Objective" )
+vline!([1], linewidth=4, linecolor=:blue, label="α = 1")
+savefig("q2_minimizing_at_alpha.pdf")
 
 
+# Compute grid for β:
+β_list = Array(-5:0.01:5)
+obj_list_β = zeros(size(β_list,1))
+for ii in 1:size(α_list,1)
+    param_true = [1,β_list[ii],6,3,0.8]
+    obj_list_β[ii] = gmm_objective(param_true, I, N, estimationData; Eta_S, Epsilon_S, S)
+end
+
+
+plot(β_list, obj_list_β, linewidth = 5, linecolor=:red, label="GMM Objective" )
+vline!([2], linewidth=4, linecolor=:blue, label="β = 2")
+savefig("q2_minimizing_at_beta.pdf")
+
+
+# Compute grid for δ
+δ_list = Array(4:0.01:9)
+obj_list_δ = zeros(size(δ_list,1))
+for ii in 1:size(δ_list,1)
+    param_true = [1,2,δ_list[ii],3,0.8]
+    obj_list_δ[ii] = gmm_objective(param_true, I, N, estimationData; Eta_S, Epsilon_S, S)
+end
+
+plot(δ_list, obj_list_δ, linewidth = 5, linecolor=:red, label="GMM Objective" )
+vline!([6], linewidth=4, linecolor=:blue, label="δ = 6")
+savefig("q2_minimizing_at_delta.pdf")
+
+# Compute grid for γ:
+
+γ_list = Array(1:0.01:5)
+obj_list_γ = zeros(size(γ_list,1))
+for ii in 1:size(γ_list,1)
+    param_true = [1,2,6,γ_list[ii],0.8]
+    obj_list_γ[ii] = gmm_objective(param_true, I, N, estimationData; Eta_S, Epsilon_S, S)
+end
+
+plot(γ_list, obj_list_γ, linewidth = 5, linecolor=:red, label="GMM Objective" )
+vline!([3], linewidth=4, linecolor=:blue, label="γ = 3")
+savefig("q2_minimizing_at_gamma.pdf")
+
+
+# Compute grid for ρ:
+
+ρ_list = Array(-10:0.01:10)
+obj_list_ρ = zeros(size(ρ_list,1))
+for ii in 1:size(ρ_list,1)
+    param_true = [1,2,6,3,ρ_list[ii]]
+    obj_list_ρ[ii] = gmm_objective(param_true, I, N, estimationData; Eta_S, Epsilon_S, S)
+end
+
+plot(1 ./(1 .+ exp.(ρ_list)), obj_list_ρ, linewidth = 5, linecolor=:red, label="GMM Objective" )
+vline!([.8], linewidth=4, linecolor=:blue, label="ρ = .8")
+savefig("q2_minimizing_at_rho.pdf")
 
 # TODO: Report results for different initial conditions...
 
