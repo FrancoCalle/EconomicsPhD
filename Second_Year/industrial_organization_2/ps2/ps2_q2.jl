@@ -290,19 +290,22 @@ savefig("q2_minimizing_at_rho.pdf")
 # Report results for different initial conditions
 #------------------------------------------------
 
-nInit = 200
+nInit = 500
 nParams = 5
-param_init_different = rand(nInit,nParams)
+param_init_different = [1,2,6,3,log(1/0.8) - 1]' .+ rand(nInit,nParams)
 param_init_results = zeros(nInit,nParams)
 # Define Anonymous Function
 func_anon(params) =  gmm_objective(params, I, N, estimationData; Eta_S, Epsilon_S, S)
 
 for ii = 1:nInit
     # Proceed to parameter estimation:
-    result = optimize(func_anon, param_init_different[ii,:], NelderMead(), Optim.Options(outer_iterations = 10000,
-                        iterations= 10000,
-                        show_trace=true,
-                        show_every=100))
+    result = optimize(func_anon, param_init_different[ii,:], NelderMead(), 
+                        Optim.Options(outer_iterations = 10000,
+                                            iterations= 10000,
+                                            show_trace=true,
+                                            show_every=100
+                                            )
+                        )
 
     param_hat = Optim.minimizer(result)
     param_init_results[ii,:] = param_hat
@@ -311,9 +314,12 @@ end
 
 param_init_results[:,end] = 1 ./(1 .+ exp.(param_init_results[:,end]))
 
-scatter([1,2,6,3,0.8],param_hat)
-plot!(1:7,1:7)
 
 # TODO: Add additional constraint to restrict values of \rho be less that 1 in absolute value...
+using StatPlots
+using PyPlot
 
+pyplot()
 
+# marginalhist(param_init_different[:,1], param_init_results[:,1], fc = :plasma)
+histogram2d(param_init_different[:,1], param_init_results[:,1], nbins=20)
