@@ -218,23 +218,8 @@ S = 100
 Eta_S = [rand(Normal(0,1), T, S) for ss = 1:S];
 Epsilon_S = [rand(Normal(0,1), T, K) for ss in 1:S];
 
-# Define Anonymous Function
-func_anon(params) =  gmm_objective(params, I, N, estimationData; Eta_S, Epsilon_S, S)
-
-
-# Proceed to parameter estimation:
-param_init = [1,2,6,3,0.8] .+ rand(5) 
-result = optimize(func_anon, param_init, NelderMead(), Optim.Options(outer_iterations = 10000,
-                    iterations= 10000,
-                    show_trace=true,
-                    show_every=100))
-
-param_hat = Optim.minimizer(result)
-param_hat[end] = 1/(1+exp(param_hat[end]))
-
-scatter([1,2,6,3,0.8],param_hat)
-plot!(1:7,1:7)
-
+# Grid Search:
+#-------------
 
 # Compute grid for α:
 α_list = Array(-5:0.01:5)
@@ -302,9 +287,32 @@ plot(1 ./(1 .+ exp.(ρ_list)), obj_list_ρ, linewidth = 5, linecolor=:red, label
 vline!([.8], linewidth=4, linecolor=:blue, label="ρ = .8")
 savefig("q2_minimizing_at_rho.pdf")
 
-# TODO: Report results for different initial conditions...
+# Report results for different initial conditions
+#------------------------------------------------
 
+nInit = 200
+nParams = 5
+param_init_different = rand(nInit,nParams)
+param_init_results = zeros(nInit,nParams)
+# Define Anonymous Function
+func_anon(params) =  gmm_objective(params, I, N, estimationData; Eta_S, Epsilon_S, S)
 
+for ii = 1:nInit
+    # Proceed to parameter estimation:
+    result = optimize(func_anon, param_init_different[ii,:], NelderMead(), Optim.Options(outer_iterations = 10000,
+                        iterations= 10000,
+                        show_trace=true,
+                        show_every=100))
+
+    param_hat = Optim.minimizer(result)
+    param_init_results[ii,:] = param_hat
+
+end
+
+param_init_results[:,end] = 1 ./(1 .+ exp.(param_init_results[:,end]))
+
+scatter([1,2,6,3,0.8],param_hat)
+plot!(1:7,1:7)
 
 # TODO: Add additional constraint to restrict values of \rho be less that 1 in absolute value...
 
