@@ -13,6 +13,8 @@ using CSV
 using Optim
 using Random
 using Plots
+using RDatasets
+using StatsPlots
 
 struct ModelParameters
     aalpha::Float16 # Firm-market specific characteristic
@@ -292,7 +294,8 @@ savefig("q2_minimizing_at_rho.pdf")
 
 nInit = 500
 nParams = 5
-param_init_different = [1,2,6,3,log(1/0.8) - 1]' .+ rand(nInit,nParams)
+shock = rand(nInit,nParams)
+param_init_different = [1,2,6,3,log(1/0.8) - 1]' .+ shock .- mean(shock,dims=1)
 param_init_results = zeros(nInit,nParams)
 # Define Anonymous Function
 func_anon(params) =  gmm_objective(params, I, N, estimationData; Eta_S, Epsilon_S, S)
@@ -314,6 +317,8 @@ end
 
 param_init_results[:,end] = 1 ./(1 .+ exp.(param_init_results[:,end]))
 
+param_init_different[:,end] = 1 ./(1 .+ exp.(param_init_different[:,end]))
+
 
 # TODO: Add additional constraint to restrict values of \rho be less that 1 in absolute value...
 using StatPlots
@@ -322,4 +327,101 @@ using PyPlot
 pyplot()
 
 # marginalhist(param_init_different[:,1], param_init_results[:,1], fc = :plasma)
-histogram2d(param_init_different[:,1], param_init_results[:,1], nbins=20)
+
+# dataframe = DataFrame(initial_value = param_init_different[:,1], 
+#                result = param_init_results[:,1]
+#                )
+
+# @df dataframe marginalhist(:initial_value, 
+#                             :result, 
+#                             nbins=30)
+
+
+
+
+
+
+#--------------------------------------------------------
+
+
+layout = @layout [a _
+        b{0.8w,0.8h} c]
+
+# Alpha:
+default(fillcolor = :lightgrey, markercolor = :white, grid = false, legend = false)
+plot(layout = layout, link = :both, size = (500, 500), margin = 5Plots.px)
+scatter!(param_init_different[:,1], 
+            param_init_results[:,1], 
+            subplot = 2, 
+            framestyle = :box            )
+histogram!([param_init_different[:,1] param_init_results[:,1]], 
+            subplot = [1 3], 
+            orientation = [:v :h], 
+            framestyle = :none,
+            )
+
+savefig("q2_2histogram_alpha.pdf")
+
+# Beta:
+default(fillcolor = :lightgrey, markercolor = :white, grid = false, legend = false)
+plot(layout = layout, link = :both, size = (500, 500), margin = 5Plots.px)
+scatter!(param_init_different[:,2], 
+            param_init_results[:,2], 
+            subplot = 2, 
+            framestyle = :box            )
+histogram!([param_init_different[:,2] param_init_results[:,2]], 
+            subplot = [1 3], 
+            orientation = [:v :h], 
+            framestyle = :none,
+            )
+
+savefig("q2_2histogram_beta.pdf")
+
+
+# Delta:
+default(fillcolor = :lightgrey, markercolor = :white, grid = false, legend = false)
+plot(layout = layout, link = :both, size = (500, 500), margin = 5Plots.px)
+scatter!(param_init_different[:,3], 
+            param_init_results[:,3], 
+            subplot = 2, 
+            framestyle = :box            )
+histogram!([param_init_different[:,3] param_init_results[:,3]], 
+            subplot = [1 3], 
+            orientation = [:v :h], 
+            framestyle = :none,
+            )
+
+savefig("q2_2histogram_delta.pdf")
+
+
+# Gamma:
+default(fillcolor = :lightgrey, markercolor = :white, grid = false, legend = false)
+plot(layout = layout, link = :both, size = (500, 500), margin = 5Plots.px)
+scatter!(param_init_different[:,4], 
+            param_init_results[:,4], 
+            subplot = 2, 
+            framestyle = :box            )
+histogram!([param_init_different[:,4] param_init_results[:,4]], 
+            subplot = [1 3], 
+            orientation = [:v :h], 
+            framestyle = :none,
+            )
+
+savefig("q2_2histogram_gamma.pdf")
+
+
+
+# Rho:
+default(fillcolor = :lightgrey, markercolor = :white, grid = false, legend = false)
+plot(layout = layout, link = :both, size = (500, 500), margin = 5Plots.px)
+scatter!(param_init_different[:,5], 
+            param_init_results[:,5], 
+            subplot = 2, 
+            framestyle = :box            )
+histogram!([param_init_different[:,5] param_init_results[:,5]], 
+            subplot = [1 3], 
+            orientation = [:v :h], 
+            framestyle = :none,
+            )
+
+savefig("q2_2histogram_rho.pdf")
