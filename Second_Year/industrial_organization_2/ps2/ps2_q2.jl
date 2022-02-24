@@ -198,7 +198,7 @@ end
 mp = ModelParameters(1,2,6,3,0.8)
 
 # Set model Data for DGP 
-T = 10; K = 30;
+T = 100; K = 30; #T = 10
 X = exp.(rand(Normal(0,1), T));
 Z = rand(Normal(0,1), K , T);
 Firm = vcat([collect(1:30) for ii = 1:T]...);
