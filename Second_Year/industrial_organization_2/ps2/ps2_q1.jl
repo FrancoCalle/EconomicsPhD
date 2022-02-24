@@ -59,7 +59,7 @@ result = optimize(func_anon, params_init, GradientDescent(), Optim.Options(outer
 # Obtain Minimizer
 param_hat = Optim.minimizer(result)
 
-scatter(param_hat, [3,4,.6], 
+scatter([3,4,.6],param_hat,  
             label="Parameters", 
             xlabel = "True Parameter", 
             ylabel = "Estimated Parameter",
