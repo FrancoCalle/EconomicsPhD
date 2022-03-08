@@ -150,7 +150,7 @@ def silverman_badwidth(x_list,df):
             
     n = df.shape[0]
     q75, q25 = np.percentile(x_list, [75 ,25])
-    iqr = q75 - q25
+    iqr = np.abs(q75 - q25)
     std_hat = np.std(x_list)
     h = .9 * min(std_hat, iqr/1.34) * n **(-.2)
 
@@ -170,7 +170,7 @@ def normal_kernel(x, df, N=3):
 
     eps = np.array(x_list - x)/h
 
-    den_i = (1/(n*h)) * 1/np.sqrt(2 * np.pi ) * np.sum(np.exp(-eps ** 2))
+    den_i = (1/(n*h)) * 1/np.sqrt(2 * np.pi) * np.sum(np.exp(-1/2 * eps ** 2))
 
     return den_i 
 
@@ -179,6 +179,8 @@ bid_c3 = np.array(df.BidC3)
 bid_c6 = np.array(df.BidC6)
 empirical_pdf_n3 = np.array([normal_kernel(x, df, 3) for x in bid_c3])
 empirical_pdf_n6 = np.array([normal_kernel(x, df, 6) for x in bid_c6])
+
+
 
 plt.scatter(df.BidC3,empirical_pdf_n3, marker="+", color="gray")
 plt.savefig("density_n3.pdf")
@@ -227,3 +229,55 @@ plt.scatter(true_valuation_c6_sorted, v_n6, marker="+", color="gray")
 plt.plot(true_valuation_c6_sorted, true_valuation_c6_sorted, color="black")
 plt.ylim(-2,60)
 plt.savefig("true_vs_estimated_valuation_n6.pdf")
+
+# L 1 Norm:
+np.mean(abs(true_valuation_c6_sorted -  v_n6))
+np.mean(abs(true_valuation_c3_sorted -  v_n3))
+
+# L 2 Norm:
+np.sqrt(1/len(v_n3)*np.sum((true_valuation_c3_sorted -  v_n3)**2))
+np.sqrt(1/len(v_n6)*np.sum((true_valuation_c6_sorted -  v_n6)**2))
+
+
+
+# Risk Aversion:
+ptile = list(range(5,96))
+
+def estimate_risk_aversion(ptile):
+
+    dif_bb_list = []
+    dif_v_hat_list = []
+
+    for pp in ptile:
+        
+        bb_c3 = np.percentile(bid_c3,pp)
+        pdf_bb = normal_kernel(bb_c3, df, 3)
+        cdf_bb = np.mean(bid_c3<=bb_c3)
+        v_hat_n3 = (1/2)*cdf_bb/pdf_bb
+
+        bb_c6 = np.percentile(bid_c6,pp)
+        pdf_bb = normal_kernel(bb_c6, df, 6)
+        cdf_bb = np.mean(bid_c6<=bb_c6)
+        v_hat_n6 = (1/5)*cdf_bb/pdf_bb
+
+        dif_bb = bb_c3 - bb_c6 
+        dif_v_hat = v_hat_n6 - v_hat_n3
+
+        dif_bb_list.append(dif_bb)
+        dif_v_hat_list.append(dif_v_hat)
+
+
+    dif_bb_list = np.array(dif_bb_list)
+    dif_v_hat_list = np.array(dif_v_hat_list)
+
+    # OLS without intercept:
+    theta = sum(dif_v_hat_list**2)**(-1)*sum(dif_bb_list*dif_v_hat_list)
+    
+    return theta
+
+# Full Sample:
+theta_full = estimate_risk_aversion(list(range(0,101)))
+# OLS Trimming 5th tails:
+theta_p5 = estimate_risk_aversion(list(range(5,96)))
+# OLS Trimming 25th tails:
+theta_p25 = estimate_risk_aversion(list(range(25,76)))
