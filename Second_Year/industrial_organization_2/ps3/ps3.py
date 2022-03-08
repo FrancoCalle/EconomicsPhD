@@ -275,9 +275,47 @@ def estimate_risk_aversion(ptile):
     
     return theta
 
+# TODO: Add 95 percent confidence intervals...
+
 # Full Sample:
 theta_full = estimate_risk_aversion(list(range(0,101)))
 # OLS Trimming 5th tails:
 theta_p5 = estimate_risk_aversion(list(range(5,96)))
 # OLS Trimming 25th tails:
 theta_p25 = estimate_risk_aversion(list(range(25,76)))
+
+
+# Estimated Valuation distribution:
+v_n3_risk_aversion = bid_c3_sorted + theta_p25 * .50 * ecdf_n3_sorted/epdf_n3_sorted
+plt.hist(v_n3_risk_aversion, bins=40, color='gray', edgecolor="black")
+plt.xlim(0,40)
+plt.ylim(0,30)
+plt.savefig("estimated_valuation_cra_n3.pdf")
+
+v_n6_risk_aversion = bid_c6_sorted + theta_p25 * .20 * ecdf_n6_sorted/epdf_n6_sorted
+plt.hist(v_n6_risk_aversion, bins=40, color='gray', edgecolor="black")
+plt.xlim(0,35)
+plt.ylim(0,25)
+plt.savefig("estimated_valuation_cra_n6.pdf")
+
+
+# Scatter plots:
+plt.scatter(true_valuation_c3_sorted, v_n3_risk_aversion, marker="+", color="gray")
+plt.plot(true_valuation_c3_sorted, true_valuation_c3_sorted, color="black")
+plt.ylim(-2,32)
+plt.savefig("true_vs_estimated_valuation_cra_n3.pdf")
+
+plt.scatter(true_valuation_c6_sorted, v_n6_risk_aversion, marker="+", color="gray")
+plt.plot(true_valuation_c6_sorted, true_valuation_c6_sorted, color="black")
+plt.ylim(-2,32)
+plt.savefig("true_vs_estimated_valuation_cra_n6.pdf")
+
+
+# L 1 Norm:
+np.mean(abs(true_valuation_c3_sorted -  v_n3_risk_aversion))
+np.mean(abs(true_valuation_c6_sorted -  v_n6_risk_aversion))
+
+# L 2 Norm:
+np.sqrt(1/len(v_n3)*np.sum((true_valuation_c3_sorted -  v_n3_risk_aversion)**2))
+np.sqrt(1/len(v_n6)*np.sum((true_valuation_c6_sorted -  v_n6_risk_aversion)**2))
+
