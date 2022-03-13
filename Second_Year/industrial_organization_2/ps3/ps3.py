@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import statsmodels.api as sm
 
 df = pd.read_csv('ps3_auction.csv')
 # df["optim_rn_Bid6"] = df.BidC6 * 5/6
@@ -239,9 +240,11 @@ np.sqrt(1/len(v_n3)*np.sum((true_valuation_c3_sorted -  v_n3)**2))
 np.sqrt(1/len(v_n6)*np.sum((true_valuation_c6_sorted -  v_n6)**2))
 
 
-
-# Risk Aversion:
+# SECTION IV:
+# Risk Aversion: Part 1:
+ptile = list(range(1,101))
 ptile = list(range(5,96))
+ptile = list(range(25,76))
 
 def estimate_risk_aversion(ptile):
 
@@ -271,19 +274,25 @@ def estimate_risk_aversion(ptile):
     dif_v_hat_list = np.array(dif_v_hat_list)
 
     # OLS without intercept:
-    theta = sum(dif_v_hat_list**2)**(-1)*sum(dif_bb_list*dif_v_hat_list)
+    # theta = sum(dif_v_hat_list**2)**(-1)*sum(dif_bb_list*dif_v_hat_list)
+    est=sm.OLS(dif_bb_list, dif_v_hat_list)
+    est = est.fit()
+    theta = est.params[0]
     
-    return theta
+    return theta, est
 
 # TODO: Add 95 percent confidence intervals...
 
 # Full Sample:
-theta_full = estimate_risk_aversion(list(range(0,101)))
+theta_full, est_full = estimate_risk_aversion(list(range(0,101)))
 # OLS Trimming 5th tails:
-theta_p5 = estimate_risk_aversion(list(range(5,96)))
+theta_p5, est_p5 = estimate_risk_aversion(list(range(5,96)))
 # OLS Trimming 25th tails:
-theta_p25 = estimate_risk_aversion(list(range(25,76)))
+theta_p25, est_p25 = estimate_risk_aversion(list(range(25,76)))
 
+est_full.summary()
+est_p5.summary()
+est_p25.summary()
 
 # Estimated Valuation distribution:
 v_n3_risk_aversion = bid_c3_sorted + theta_p25 * .50 * ecdf_n3_sorted/epdf_n3_sorted
@@ -315,7 +324,8 @@ plt.savefig("true_vs_estimated_valuation_cra_n6.pdf")
 np.mean(abs(true_valuation_c3_sorted -  v_n3_risk_aversion))
 np.mean(abs(true_valuation_c6_sorted -  v_n6_risk_aversion))
 
+
 # L 2 Norm:
-np.sqrt(1/len(v_n3)*np.sum((true_valuation_c3_sorted -  v_n3_risk_aversion)**2))
-np.sqrt(1/len(v_n6)*np.sum((true_valuation_c6_sorted -  v_n6_risk_aversion)**2))
+np.sqrt(1/len(v_n3_risk_aversion)*np.sum((true_valuation_c3_sorted -  v_n3_risk_aversion)**2))
+np.sqrt(1/len(v_n6_risk_aversion)*np.sum((true_valuation_c6_sorted -  v_n6_risk_aversion)**2))
 
