@@ -1,92 +1,76 @@
 # Quant Marketing Pset 1:
 
-install.packages("bayesm")
-install.packages("Rcpp")
+#install.packages("bayesm")
+
+#install.packages("Rcpp")
 
 library("bayesm")
+
 library("Rcpp")
-library("")
 
+#git_path = "C:/Users/franc/OneDrive/Documents/GitHub/Chicagobooth/EconomicsPhD/Second_Year/quant_marketing"  
 
-git_path = "C:/Users/franc/OneDrive/Documents/GitHub/Chicagobooth/EconomicsPhD/Second_Year/quant_marketing"  
-
-data_path = "C:/Users/franc/Dropbox/Franco Econ Phd/2 Second Year/Winter/Quantitative Marketing/ps1/pbout_final.csv"
-
-df_name = "pbout_final.txt"
+data_path = "C:/Users/franc/Dropbox/Franco Econ Phd/2 Second Year/Winter/Quantitative Marketing/ps1/pbout_final.csv" #df_name = "pbout_final.txt"
 
 
 # Pbout Data:
 pbout_data <- read.table(data_path, sep=",", head=TRUE)
 
-#write.csv(pbout_data, 'C:/Users/franc/Dropbox/Franco Econ Phd/2 Second Year/Winter/Quantitative Marketing/ps1/pbout_2.csv')
-#table(pbout_data["choice"]) # We have nine products ...
+p = 9
+
+R <- 2000 # or if we want a short test, set R = 20
+
+# Specification 1: Only Price:
+# ----------------------------
+
+y = matrix(pbout_data$choice, ncol = p, byrow = TRUE)[,1]
+
+X = matrix(pbout_data$price, nrow = length(pbout_data$panelid), byrow = TRUE)  # here, k is 1, only price is the characteristics; p = 9 the number of choices
+
+Data1 = list(y = y, X = X, p = p)
+
+Mcmc1 = list(R=R, keep=1)
+
+out = rmnlIndepMetrop(Data=Data1, Mcmc=Mcmc1) ####### This gives us the estimate for beta, the coefficient for x (price here) in the problem 
+
+print(summary(out$betadraw), digits = 10)
+
+posteriors <- out$betadraw
+
+pos_ll1 <- logMargDenNR(out$loglike)
 
 
-
-# llmnl(-999, data.matrix(pbout_data$choice), data.matrix(pbout_data$price))
-
-y = pbout_data[,3]
-
-X1 <- createX(p=9, na=1, Xa=pbout_data[,8:16], nd=NULL, Xd=NULL, base=1)
+# Specification 2: Alternative specific dummy and price:
+# ------------------------------------------------------
 
 
-mydata <- list(y = y,
-               X = X1,
-               p = 9)
+fixed_effects = do.call(rbind, replicate(nrow(pbout_data)/p, diag(p), simplify=FALSE))
 
-mymcmc <- list(R = 1000, nprint = 0)
+X2= cbind(pbout_data$price, fixed_effects)  
 
-out <- rmnlIndepMetrop(Data = mydata, Mcmc = mymcmc)
+Data2 = list(y = y, X = X2, p = p)
 
-summary(out$betadraw)
+out2 = rmnlIndepMetrop(Data=Data2, Mcmc=Mcmc1)
 
-plot(out$betadraw)
+print(summary(out2$betadraw), digits = 10)
 
-
-dim(out$betadraw)
-
-median(out$betadraw[,1])
-median(out$betadraw[,2])
-median(out$betadraw[,3])
-median(out$betadraw[,4])
-median(out$betadraw[,5])
-median(out$betadraw[,6])
-median(out$betadraw[,7])
-median(out$betadraw[,8])
-median(out$betadraw[,9])
+pos_ll2 <- logMargDenNR(out2$loglike)
 
 
+# Specification 3: Alternative specific dummy, price, promotions:
+# ---------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Testing model:
-#------------------------------------------------------------------------------
+fixed_effects = do.call(rbind, replicate(nrow(pbout_data)/p, diag(p), simplify=FALSE))
 
+X3= cbind(pbout_data$price, pbout_data$loyalty-mean(pbout_data$loyalty), fixed_effects[,1:8])  # , 
 
-data(margarine)
-str(margarine)
-marg <- merge(margarine$choicePrice, margarine$demos, by = "hhid")
+Data3 = list(y = y, X = X3, p = p)
 
+out3 = rmnlIndepMetrop(Data=Data3, Mcmc=Mcmc1)
 
-y <- marg[,2]
+print(summary(out3$betadraw), digits = 10)
 
-
-X1 <- createX(p=10, na=1, Xa=marg[,3:12], nd=NULL, Xd=NULL, base=1)
-
-
-
-out <- rmnlIndepMetrop(Data = list(y=y, X=X1, p=10), 
-                       Mcmc = list(R=1e3, nprint=1e3))
-
-
-
-
-
-
-
-
-
-
-
+pos_ll3 <- logMargDenNR(out3$loglike)
 
 
 
