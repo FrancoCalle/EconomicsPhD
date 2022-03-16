@@ -1,14 +1,12 @@
 # Quant Marketing Pset 1:
 
 #install.packages("bayesm")
-
 #install.packages("Rcpp")
+#install.packages('JWileymisc')
 
 library("bayesm")
-
 library("Rcpp")
-
-#git_path = "C:/Users/franc/OneDrive/Documents/GitHub/Chicagobooth/EconomicsPhD/Second_Year/quant_marketing"  
+library('JWileymisc')
 
 data_path = "C:/Users/franc/Dropbox/Franco Econ Phd/2 Second Year/Winter/Quantitative Marketing/ps1/pbout_final.csv" #df_name = "pbout_final.txt"
 
@@ -18,7 +16,9 @@ pbout_data <- read.table(data_path, sep=",", head=TRUE)
 
 p = 9
 
-R <- 2000 # or if we want a short test, set R = 20
+R <- 3000 # or if we want a short test, set R = 20
+
+Mcmc1 = list(R=R, keep=1)
 
 # Specification 1: Only Price:
 # ----------------------------
@@ -29,15 +29,11 @@ X = matrix(pbout_data$price, nrow = length(pbout_data$panelid), byrow = TRUE)  #
 
 Data1 = list(y = y, X = X, p = p)
 
-Mcmc1 = list(R=R, keep=1)
-
 out = rmnlIndepMetrop(Data=Data1, Mcmc=Mcmc1) ####### This gives us the estimate for beta, the coefficient for x (price here) in the problem 
 
 print(summary(out$betadraw), digits = 10)
 
 posteriors <- out$betadraw
-
-pos_ll1 <- logMargDenNR(out$loglike)
 
 
 # Specification 2: Alternative specific dummy and price:
@@ -54,7 +50,6 @@ out2 = rmnlIndepMetrop(Data=Data2, Mcmc=Mcmc1)
 
 print(summary(out2$betadraw), digits = 10)
 
-pos_ll2 <- logMargDenNR(out2$loglike)
 
 
 # Specification 3: Alternative specific dummy, price, promotions:
@@ -70,7 +65,25 @@ out3 = rmnlIndepMetrop(Data=Data3, Mcmc=Mcmc1)
 
 print(summary(out3$betadraw), digits = 10)
 
-pos_ll3 <- logMargDenNR(out3$loglike)
+
+
+# Compute credibility interval:
+
+u_q <- quantile(out$betadraw, 0.95)
+l_q <- quantile(out$betadraw, 0.05)
+
+u_q <- quantile(out2$betadraw[,1], 0.95)
+l_q <- quantile(out2$betadraw[,1], 0.05)
+
+u_q <- quantile(out3$betadraw[,1], 0.95)
+l_q <- quantile(out3$betadraw[,1], 0.05)
+
+# Compute posterior log likelihood:
+pos_ll1 <- logMargDenNR(out$loglike[out$loglike < quantile(out$loglike, 0.95) & out$loglike > quantile(out$loglike, 0.05)])
+pos_ll2 <- logMargDenNR(out2$loglike[out2$loglike < quantile(out2$loglike, 0.95) & out2$loglike > quantile(out2$loglike, 0.05)])
+pos_ll3 <- logMargDenNR(out3$loglike[out3$loglike < quantile(out3$loglike, 0.95) & out3$loglike > quantile(out3$loglike, 0.05)])
+
+
 
 
 
