@@ -135,7 +135,18 @@ for (i in 1:nlgt) {
   
   temp_data <- pbout_brand %>% filter(panelid == list_hh[i])
   
-  X = cbind(temp_data$price, temp_data$feature, temp_data$display, temp_data$loyalty, temp_data$product_1, temp_data$product_2, temp_data$product_3, temp_data$product_4, temp_data$product_5, temp_data$product_6, temp_data$product_7, temp_data$product_8)  
+  X = cbind(temp_data$price, 
+            temp_data$feature, 
+            temp_data$display, 
+            temp_data$loyalty, 
+            temp_data$product_1, 
+            temp_data$product_2, 
+            temp_data$product_3, 
+            temp_data$product_4, 
+            temp_data$product_5, 
+            temp_data$product_6, 
+            temp_data$product_7, 
+            temp_data$product_8)  
   
   y = matrix(temp_data$choice, ncol = p, byrow = TRUE)
   
