@@ -34,7 +34,7 @@ pbout_brand <- cbind(pbout_brand, intercept)
 
 y = matrix(pbout_brand$choice, ncol = p, byrow = TRUE)[,1]
 
-X = cbind(pbout_brand$intecept, pbout_brand$price, pbout_brand$loyalty)  
+X = cbind(pbout_brand$price, pbout_brand$loyalty)  
 
 Data1 = list(y = y, X = X, p = p)
 
@@ -111,9 +111,9 @@ for (i in 1:nlgt) {
 }
 
 
-Prior2 = list(ncomp=count) 
+Prior2 = list(ncomp=5) 
 
-Mcmc2 = list(R=R, keep=1)  
+Mcmc2 = list(R=5000, keep=1)  
 
 Data2 = list(p=p, lgtdata=lgtdata, Z=Z) 
 
@@ -155,7 +155,7 @@ for (i in 1:nlgt) {
 }
 
 
-Prior3 = list(ncomp=3) 
+Prior3 = list(ncomp=5) 
 
 Mcmc3 = list(R=R, keep=1)  
 
