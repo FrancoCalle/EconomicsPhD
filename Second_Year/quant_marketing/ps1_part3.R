@@ -7,7 +7,6 @@ library('fastDummies')
 
 data_path = "C:/Users/franc/Dropbox/Franco Econ Phd/2 Second Year/Winter/Quantitative Marketing/ps1/pbout_final.csv" 
 
-
 # Pbout Data:
 pbout_data <- read.table(data_path, sep=",", head=TRUE)
 
