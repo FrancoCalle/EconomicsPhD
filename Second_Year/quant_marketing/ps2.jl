@@ -164,6 +164,9 @@ scatter!(cost_placeholder[2:100, 7, 3], shape=:x, color=:gray, label="β: .95")
 savefig("PS2_Plot_values_type_discount.pdf")
 
 
+scatter(cost_placeholder[2:100, 7, 4], shape=:x, color=:gray, label="β: .80")
+savefig("PS2_Plot_values_type_very_low_discount.pdf")
+
 
 # Plotting figures: Changes reward utility:
 
@@ -229,9 +232,13 @@ c3 = median(cost_placeholder[:,:,3], dims=2)[2:100]
 c4 = median(cost_placeholder[:,:,4], dims=2)[2:100]
 
 scatter(c1, shape=:+, color=:gray, label="β: .99")
-scatter(c2, shape=:+, color=:gray, label="β: .99")
-scatter(c3, shape=:+, color=:gray, label="β: .99")
-scatter(c4, shape=:+, color=:gray, label="β: .99")
+scatter!(c2, shape=:+, color=:gray, label="β: .97")
+scatter!(c3, shape=:+, color=:gray, label="β: .95")
+savefig("PS2_median_cost.pdf")
+
+
+scatter(c4, shape=:+, color=:gray, label="β: .8")
+savefig("PS2_median_cost_aggressive_discount.pdf")
 
 
 # Mean:
@@ -241,12 +248,14 @@ c3 = mean(cost_placeholder[:,2:end,3], dims=2)[2:100]
 c4 = mean(cost_placeholder[:,2:end,4], dims=2)[2:100]
 
 scatter(c1, shape=:+, color=:gray, label="β: .99")
-scatter(c2, shape=:+, color=:gray, label="β: .99")
-scatter(c3, shape=:+, color=:gray, label="β: .99")
-scatter(c4, shape=:+, color=:gray, label="β: .99")
+scatter!(c2, shape=:+, color=:gray, label="β: .99")
+scatter!(c3, shape=:+, color=:gray, label="β: .99")
+savefig("PS2_mean_cost.pdf")
 
 # Get ratio of switching costs
 
+scatter(c4, shape=:+, color=:gray, label="β: .80")
+savefig("PS2_mean_cost_aggressive_discount.pdf")
 
 
 
