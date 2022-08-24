@@ -25,7 +25,7 @@ struct ModelDimensions
 end
 
 
-struct ModelParameters
+mutable struct ModelParameters
     ρ::Float16
     α::Float16
     γ::Float16 
@@ -40,25 +40,17 @@ struct ChebyshevParameters
     N_dim::Int 	        # Number of dimensions (variables of the model)
     N_degree::Int       # Degree / order of the Chebyshev polynomial
     N_nodes::Int        # Number of Chebyshev interpolation nodes
-    lower_bound::Array	# Lowest value for each variable
-    upper_bound::Array  # Highest value of each variable
+end
+
+struct QuadratureParameters
+    N_dim::Int 	        # Number of dimensions (variables of the model)
+    N_States::Int       # Degree / order of the Chebyshev polynomial
 end
 
 
-dims = ModelDimensions(1000, 2, 5, 10)
-mp   = ModelParameters(.9,      # ρ
-                        .79,    # α
-                        .5,     # γ
-                        .995,   # β
-                        .5,     # σ_v
-                        .5,     # σ_0
-                        1,      # μ_0
-                        [.5 .5] # ϑ
-                        )
-
 function compute_random_utility(ξ_ij, mp = mp)
 
-    u_ijt = mp.γ .- exp.(  -ρ .* ξ_ij  ) 
+    u_ijt = mp.γ .- exp.(  -mp.ρ .* ξ_ij  ) 
 
     return u_ijt
 
@@ -87,9 +79,7 @@ function update_quality_variance(σ_prior_0, σ_prior, D_jt)
 end
 
 
-function generate_model_simulation(mp, dims)
-
-    maxiter= 200
+function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter = 200)
 
     # Unpack Parameters:
     α = mp.α
@@ -101,8 +91,7 @@ function generate_model_simulation(mp, dims)
 
     # Unpack Dimensions:
     J = dims.J
-    nStates = 50
-    nPolynomials = dims.nPolynomials
+    nStates = dims.nStates
     T = maxiter
 
 
@@ -113,7 +102,7 @@ function generate_model_simulation(mp, dims)
     ϵ_jt = rand(Gumbel(0,1), J, T)
 
     # Get nodes and weights from quadrature assuming only state is quality:
-    q_nodes, q_weights = GaussHermite(1, nStates)
+    q_nodes, q_weights = GaussHermite(quad_params.N_dim, quad_params.N_States)
 
     # Generate arrays where we will store simulations: 
     
@@ -157,7 +146,12 @@ function generate_model_simulation(mp, dims)
         for jj = 1:J
             #2. Apply Chebyshev's approximation to tomorrow's random utility:
             # Initialize Chebyshev approximator
-            cheb = initializeChebyshevApproximator(1, 5, 9, [minimum(ξ_prime_ij[:,jj])], [maximum(ξ_prime_ij[:,jj])])
+            cheb = initializeChebyshevApproximator(cheb_params.N_dim, 
+                                                    cheb_params.N_degree, 
+                                                    cheb_params.N_nodes , 
+                                                    [minimum(ξ_prime_ij[:,jj])], 
+                                                    [maximum(ξ_prime_ij[:,jj])]
+                                                    )
 
             # Calculate Chebyshev regression coefficients to approximate f
             cheb = calculateChebyshevCoefficients(compute_random_utility, cheb)
@@ -190,28 +184,37 @@ function generate_model_simulation(mp, dims)
         tt += 1
     end
 
-    T = tt
-    plot(V_all[1,1:T])
-    plot!(V_all[2,1:T])
-
-    plot(μ_prior[1,1:T])
-
-    return
+    T = tt-1
+    
+    return V_all[:,1:T], D_jt[:,1:T], μ_prior[:,1:T], σ_prior[:,1:T]
 end
 
 
 
+dims = ModelDimensions(1000, # nObs
+                        2,   # J
+                        5,   # nStates
+                        10)  # nPolynomials
 
+mp   = ModelParameters(.9,      # ρ
+                        .79,    # α
+                        .5,     # γ
+                        .995,   # β
+                        .5,     # σ_v
+                        .5,     # σ_0
+                        1,      # μ_0
+                        [.5 .5] # ϑ
+                        )
 
-cheb_hyperparams = ChebyshevParameters(3, 5, 9, [-5, -2, -3], [ 2,  4,  3])
+cheb_params = ChebyshevParameters(  1, # N_dim
+                                    5, # N_degree
+                                    9  # N_nodes
+                                    )
 
-N_params    = 1						# Dimensionality = number of function arguments
-N_q_nodes	= 50				    # No. of quadrature nodes
-L			= 10000000 				# Number of simulation draws
-    
+quad_params = QuadratureParameters( 1, # N_dim
+                                    50, # N_states
+                                    )
 
-vijs = q_nodes .* σ_prior[:,1]' .+ μ_prior[:,1]'
+# Model 1: β = 0,998; 0,995; 0,99; 0;
+V_all, D_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params)
 
-
-
-compute_random_utility(vijs, μ_prior[:,tt], mp)
