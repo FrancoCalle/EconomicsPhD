@@ -17,6 +17,8 @@
 #	weights		... 
 
 using LinearAlgebra
+using Kronecker
+using Distributions
 
 function GaussHermite(N_dim, N_nodes) 
 
@@ -36,41 +38,48 @@ function GaussHermite(N_dim, N_nodes)
 		w = zeros(n,1)
 		m = (n+1)/2
 
+		z = 0
+		z1 = -9
+		its = 0
+		p3 = 0.0
+		pp = 0
+
         for i = 1:m 
 
-            if (i == 1)
+            if i == 1
 		        z = sqrt((2*n+1)) - 1.85575 * (2*n+1) ^ (-0.16667)
-		    elseif (i == 2)
+		    elseif i == 2
 		        z = z - 1.14*(n^0.426)/z
-		    elseif (i == 3)
+		    elseif i == 3
 		        z=1.86*z-0.86*x[1]
-		    elseif (i == 4)
+		    elseif i == 4
 		        z=1.91*z-0.91*x[2]
 		    else 
-		        z=2.0*z-x[i-2]
+		        z=2.0*z-x[Int(i-2)]
             end
-	
-		    for its = 1:MAXIT
 
-		        p1=PIM4
-		        p2=0.0
+		    while (abs(z-z1) > EPS) | (its < MAXIT) 
+
+				its += 1
+		        p1 = PIM4
+		        p2 = 0.0
 		        
                 for j = 1:n 
-		            p3=p2
-		            p2=p1
-		            p1=z * sqrt(2.0/j) * p2-sqrt(((j-1))/j) * p3
+		            p3 = p2
+		            p2 = p1
+		            p1 = z * sqrt(2.0/j) * p2-sqrt(((j-1))/j) * p3
                 end
 		        
 		        pp = sqrt(2*n)*p2
 		        z1 = z
-		        z = z1-p1/pp
-		        if abs(z-z1) <= EPS break end
+		        z = z1 - p1 / pp
+				
             end
 		    
-		    x[i] = z
-		    x[n+1-i] = -z
-		    w[i]=2.0 / (pp * pp)
-		    w[n+1-i]=w[i]
+		    x[Int(i)] = z
+		    x[Int(n+1-i)] = -z
+		    w[Int(i)] = 2.0 / (pp * pp)
+		    w[Int(n+1-i)] = w[Int(i)]
 
         end
 				
@@ -80,14 +89,18 @@ function GaussHermite(N_dim, N_nodes)
 	## Sub-function expand_mdim:
 	function expand_mdim(x,y)
 		
-        N_x = nrow(x)
-		N_y = nrow(y)
-		z = c()
-		
-        for i = 1:N_x 
-		    D = matrix(x[i,:], nrow=N_y, ncol=ncol(x), byrow=T)
-		    E = cbind(D, y)
-		    z = rbind(z, E)
+        N_x = size(x,1)
+		N_y = size(y,1)
+		z = 0
+        
+		for i = 1:N_x 
+		    D = ones(N_y, size(x,2)) .* x[i,:]
+		    E = hcat(D, y)
+			if i==1
+		    	z = copy(E)
+			else
+		    	z = vcat(z,E)
+			end
         end
 		
 		return z
@@ -101,17 +114,17 @@ function GaussHermite(N_dim, N_nodes)
     X = copy(x)
     W = copy(w)
 
-    for i = 2:dim 
+    for i = 2:dim
 	    X = expand_mdim(x, X)
 	    W = expand_mdim(w, W)
     end
 	
-	weight = apply(W, 1, cumprod)'
-	weight = matrix(weight[:,dim], ncol=1)
+	weight = cumprod(W, dims=2)
+	weight = weight[:,dim]
 	
-	gauss_hermite = list(X = X, weight = weight)
+	# gauss_hermite = list(X = X, weight = weight)
 
-    return gauss_hermite
+    return X, weight
 
 end
 
@@ -132,43 +145,39 @@ L			= 10000000 				# Number of simulation draws
 mu = [0.5, -1.0, 0.0]				# Multivariate normal distribution: mean
 
 # Covariance matrix: creative positive definite matrix (a valid covariance matrix) from A
-A = Array([1.0  0.2 -0.5; 0.2  1.6  0.9; -0.5  0.9  0.2])
+A = Array([1.0  0.2 -0.5; 
+			0.2  1.6  0.9; 
+			-0.5  0.9  0.2])
 
 # Generate 
 Cov = A' * A					# Covariance matrix of multivariate normal distribution
-chol_Cov = cholesky(Cov)        # Cholesky decomposition
-
+chol_Cov = cholesky(Cov).U        # Cholesky decomposition
 
 
 # Functions to integrate ----------------------------------------------------------------
-f = function(X) {
-	x1 = X[,1]
-	x2 = X[,2]
-	x3 = X[,3]
-	
-	return(sin(2*x1)*x2^2 + x3)
-}
-	
+f(X) = sin.(2 .* X[:,1]) .* X[:,2].^2 .+ X[:,3]
 
 
 # Initialize quadrature nodes and weights
 gauss_hermite = GaussHermite(N_dim, N_nodes)
 
+X, weight = gauss_hermite
 
 # Gauss-Hermite integral
-M			= dim(gauss_hermite$X)[1]
-X_adjusted	= sqrt(2) * gauss_hermite$X %*% chol_Cov + matrix(mu, nrow=M, ncol=N_dim, byrow=TRUE)
+M			= size(X,1)
+X_adjusted	= sqrt(2) .* X * chol_Cov .+ repeat(mu',M, 1)
 y			= f(X_adjusted)
-I_gauss_hermite	= (1/pi^(N_dim/2)) * t(gauss_hermite$weight) %*% y
+I_gauss_hermite	= (1/pi^(N_dim/2)) .* weight' * y
 
 
 # Simulated (Monte Carlo) integral
-set.seed(124)
 
-X_draws		= matrix(rnorm(L*N_dim), nrow=L, ncol=N_dim)  %*% chol_Cov + matrix(mu, nrow=L, ncol=N_dim, byrow=TRUE)
-y			= f(X_draws);
-I_simulated	= mean(y);
+X_draws		= rand(Normal(0,1), L, N_dim)  * chol_Cov .+ repeat(mu', L, 1)
+y			= f(X_draws)
+I_simulated	= mean(y)
 
 
-comparison = c(I_gauss_hermite, I_simulated, abs(I_gauss_hermite-I_simulated))
-print(comparison)
+print("Done")
+print(I_gauss_hermite[1],'\n')
+print(I_simulated,'\n')
+print( abs(I_gauss_hermite[1] - I_simulated),'\n')
