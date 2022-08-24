@@ -52,7 +52,11 @@ function initializeChebyshevApproximator(N_dim, N_degree, N_nodes, lower_bound, 
 	nu_nodes = .- cos.(pi .* ( (2 .* Array(1:N_nodes) .- 1) ./ (2 * N_nodes)))
 
 	# Create a table of all N_dim dimensional nodes (N_nodes^N_dim by N_dim matrix)
-    X_temp = collect(Base.product(nu_nodes, nu_nodes, nu_nodes))
+    list_nodes_nu = ()
+    for z=1:N_dim
+            list_nodes_nu = (list_nodes_nu..., nu_nodes)
+    end
+    X_temp = collect(Base.product(list_nodes_nu...))
     X_temp = reshape(X_temp, (length(nu_nodes) ^ N_dim))    
     
     # Placeholder
@@ -131,7 +135,8 @@ end
 
 function evaluateChebyshev(Z, cheb) 
 	
-	L, K = size(Z)
+	L = size(Z)[1]
+    K = cheb.N_dim
 		
 	# Adjust points in Z to rectangle
     Z = 2 .* (Z .- cheb.lower_bound' ) ./ (cheb.upper_bound .- cheb.lower_bound)' .- 1

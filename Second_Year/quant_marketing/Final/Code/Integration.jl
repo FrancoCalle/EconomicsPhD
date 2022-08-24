@@ -15,7 +15,7 @@ A = Array([1.0  0.2 -0.5;
         -0.5  0.9  0.2])
 
 # Generate 
-Cov = A' * A					# Covariance matrix of multivariate normal distribution
+Cov = A' * A			# Covariance matrix of multivariate normal distribution
 chol_Cov = cholesky(Cov).U        # Cholesky decomposition
 
 
