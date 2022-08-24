@@ -19,7 +19,7 @@ source("Chebyshev-Approximator.R")
 
 # Medium difficult
 f = function(X) {
-	return( X[,1]*exp(5 + X[,2])*X[,3] )
+	return( X[,1]*log(5 + X[,2])*X[,3] )
 }
 
 # More difficult

@@ -2,8 +2,7 @@
 #	-------------------------------------------------------------------------------------
 #	Günter J. Hitsch, April 2014
 #	Chebyshev approximation for arbitrary number of dimensions
-#   Franco's Version:
-
+#   Franco's Version in .jl
 
 
 #	initializeChebyshevApproximator
@@ -22,23 +21,38 @@
 #	T2			... pre-computed Chebyshev sum-of-squares
 
 
+using Kronecker
+using Distributions
 
-reshape([ x * y * z  for x=nu_nodes, y=nu_nodes, z=nu_nodes ], (length(nu_nodes) ^ 3, 9) )
+mutable struct ChebyshevFeatures
+    N_dim::Int
+    N_degree::Int 
+    N_nodes::Int
+    lower_bound::Array 
+    upper_bound::Array
+    theta::Array
+    X::Array
+    TX::Array
+    T2::Array
+end
+
 
 function initializeChebyshevApproximator(N_dim, N_degree, N_nodes, lower_bound, upper_bound)
    
     # Catch some basic input errors
 	if N_nodes < N_degree + 1
 		print("Error: Number of Chebyshev interpolation nodes (N_nodes) < N_degree + 1!\n")
+    end
 	
 	if sum(lower_bound >= upper_bound) > 0
 		print("Error: Rectangle (grid) upper_bound > lower_bound not true in all dimensions!\n")
+    end
 
     # Calculate original [-1, 1] nodes
 	nu_nodes = .- cos.(pi .* ( (2 .* Array(1:N_nodes) .- 1) ./ (2 * N_nodes)))
 
 	# Create a table of all N_dim dimensional nodes (N_nodes^N_dim by N_dim matrix)
-    X_temp = collect(Base.product(xi_nodes[:,1], xi_nodes[:,2], xi_nodes[:,3]))
+    X_temp = collect(Base.product(nu_nodes, nu_nodes, nu_nodes))
     X_temp = reshape(X_temp, (length(nu_nodes) ^ N_dim))    
     
     # Placeholder
@@ -48,40 +62,94 @@ function initializeChebyshevApproximator(N_dim, N_degree, N_nodes, lower_bound, 
     end
 	X = X[:, end:-1:1] # Flip.
 
-    # TODO:::
     # Adjust nodes to range of the interval in dimension k
-	delta = upper_bound - lower_bound
-	for (k in 1:N_dim)
-		X[,k] = 0.5*delta[k]*(X[,k] + 1) + lower_bound[k]
+	delta = upper_bound .- lower_bound
+    X = 0.5 .* delta' .* (X .+ 1) .+ lower_bound'
 
+    # TODO:::
 	# Calculate Chebyshev polynomial values for all nodes (N_nodes by N_degree+1 matrix)
 	Tnu = calculateChebyshevPolynomials(N_degree, nu_nodes)
 	
 	# Calculate TX, the regressor matrix of Chebyshev polynomials
-	TX = Tnu
-	if (N_dim > 1) {
-		for (k in 2:N_dim) TX = TX %x% Tnu
-	}
+	TX = copy(Tnu)
+	if N_dim > 1
+		for k = 2:N_dim 
+            TX = TX ⊗ Tnu
+        end
+    end
 	
 	# Precompute the denominator "sum of squares" terms used in the Chebyshev coefficients formula
 	K = (N_degree + 1)^N_dim
-	T2 = matrix(0, nrow = K, ncol = 1)
-	for (k in 1:K)
-		T2[k] = t(TX[,k]) %*% TX[,k]
-	
+    T2 = sum(TX .* TX, dims=1)'
+
 	# Initialize Chebyshev regression coefficients
-	theta = matrix(0, nrow = K, ncol = 1)
+	theta = zeros(K, 1)
 	
-	cheb = list(N_dim = N_dim, N_degree = N_degree, N_nodes = N_nodes,
-				lower_bound = lower_bound, upper_bound = upper_bound,
-				theta = theta, X = X, TX = TX, T2 = T2)
+	cheb = ChebyshevFeatures(N_dim, 
+                                N_degree, 
+                                N_nodes,
+                                lower_bound, 
+                                upper_bound,
+                                theta, 
+                                X, 
+                                TX, 
+                                T2)
+
+    return cheb
 
 end
 
 
-N_dim 		= 3
-N_degree	= 5
-N_nodes		= 9
-lower_bound = (-5, -2, -3)		# Rectangle bounds
-upper_bound = ( 2,  4,  3)
-L			= 10000 			# Number of points to compare true function and approximation
+function calculateChebyshevPolynomials(N_degree, x)
+	
+	Tx = zeros(length(x), N_degree + 1)
+
+	# Recursively calculate polynomials
+	Tx[:,1] .= 1
+	if N_degree >= 1 
+        Tx[:,2] .= x					# If polynomial degree >= 1
+    end
+	if N_degree >= 2	            # If polynomial degree >= 2
+		for k in 2:N_degree
+			Tx[:,k+1] .= 2 .* x .* Tx[:,k] .- Tx[:,k-1]
+        end
+    end
+
+	return Tx
+end
+
+
+function calculateChebyshevCoefficients(f, cheb) 
+	
+    theta_hat = (cheb.TX' * f(cheb.X)) ./ cheb.T2
+
+    setfield!(cheb, :theta, theta_hat)
+
+	return cheb
+end
+
+
+function evaluateChebyshev(Z, cheb) 
+	
+	L, K = size(Z)
+		
+	# Adjust points in Z to rectangle
+    Z = 2 .* (Z .- cheb.lower_bound' ) ./ (cheb.upper_bound .- cheb.lower_bound)' .- 1
+	
+	# Polynomial values for each row in Z
+	TZ = zeros(L, (cheb.N_degree + 1)^cheb.N_dim)
+
+    for i = 1:L 	
+		z = calculateChebyshevPolynomials(cheb.N_degree, Z[i,K])
+		if K > 1
+			for k =  1:K-1 
+                z = calculateChebyshevPolynomials(cheb.N_degree, Z[i,K-1 - (k-1)]) ⊗ z
+            end
+        end
+		TZ[i,:] = z
+    end
+	
+	y_hat = TZ * cheb.theta
+	
+	return y_hat
+end
