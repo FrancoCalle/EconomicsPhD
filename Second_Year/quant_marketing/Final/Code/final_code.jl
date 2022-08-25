@@ -119,11 +119,12 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
     T = dims.T            # Time periods for updating rule
 
     # Generate fake prices, transition matrix and sequence of states:
-    P =  [0.217756  0.0969838;
-            0.774392  0.582034;
-            0.662304  0.826249;
-            0.690314  0.343262;
-            0.150091  0.439394]
+    P =  [  0.217756  0.1969838;
+            0.274392  0.202034;
+            0.312304  0.2526249;
+            0.320314  0.303262;
+            0.350091  0.340
+            ]
 
     Π = generate_price_transition_matrix(nStates)
 
@@ -146,10 +147,14 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
     # 3. Choice:
     D_jt = zeros(J, T)
+
+    Pr_jt = zeros(J, T)
     
     V_all = zeros(J, T)
 
-    # Add possibility to choose outside option.
+    TT = 0
+
+    # TODO: Add possibility to choose outside option ...
     for tt = 1:(T-1)
 
         Vdiff = 10
@@ -160,7 +165,7 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
         its = 1
 
-        # COMPUTING VALUE FUNCTION: (add more states for prices, but more importantly change contraction ...)
+        # COMPUTING VALUE FUNCTION: 
         while (Vdiff > 0.00000001) & (its < maxiter)
 
             # Compute beliefs about tomorrow's quality experience:
@@ -210,6 +215,8 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
         V_all[:,tt] = flow_utility + β.* EV[m_states[tt],:]
         
+        Pr_jt[:,tt] = exp.(V_all[:,tt]) ./ (1 .+ sum(exp.(V_all[:,tt]),dims=1))
+
         D_jt[:,tt] = V_all[:,tt] .== maximum(V_all[:,tt])
 
         # Update Beta:
@@ -221,10 +228,10 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
         # Update Prior Variance for next period: 
         σ_prior[:, tt+1] = update_quality_variance(σ_prior[:,1], σ_prior[:,tt], D_jt[:,1:tt]) 
 
-        T = tt-1
+        TT = tt
     end
     
-    return V_all[:,1:T], D_jt[:,1:T], μ_prior[:,1:T], σ_prior[:,1:T]
+    return V_all[:,1:TT-1], D_jt[:,1:TT-1], μ_prior[:,1:TT-1], σ_prior[:,1:TT-1]
 end
 
 
@@ -237,14 +244,15 @@ dims = ModelDimensions(1000, # nObs
                         )  
 
 mp   = ModelParameters(.9,      # ρ
-                        .79,    # α
-                        .5,     # γ
+                        .2,    # α
+                        1.5,     # γ
                         .995,   # β
                         .5,     # σ_v
-                        .5,     # σ_0
+                        .4,     # σ_0
                         1,      # μ_0
-                        [.5 .5] # ϑ
+                        [.8 .8] # ϑ
                         )
+
 
 cheb_params = ChebyshevParameters(  1, # N_dim
                                     5, # N_degree
