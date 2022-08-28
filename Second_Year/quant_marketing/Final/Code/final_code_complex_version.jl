@@ -271,9 +271,9 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
         V_all[:,tt] = flow_utility + β.* EV[m_states[tt], s_state,:]
         
-        V = V_all[:,tt] .- maximum(V_all[:,tt])
+        V_placeholder = V_all[:,tt] .- maximum(V_all[:,tt])
 
-        Pr_jt[1:J,tt] = exp.(V) ./ (1 .+ sum(exp.(V),dims=1))
+        Pr_jt[1:J,tt] = exp.(V_placeholder) ./ (1 .+ sum(exp.(V_placeholder),dims=1))
 
         Pr_jt[J+1,tt] = 1 - sum(Pr_jt[1:J,tt])
 
@@ -326,11 +326,7 @@ quad_params = QuadratureParameters( 1, # N_dim
                                     )
 
 # Model 1: β = 0,998; 0,995; 0,99; 0;
-V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params)
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
 
 
-
-plot(V_all[1,:])
-
-plot(μ_prior[1,:])
 
