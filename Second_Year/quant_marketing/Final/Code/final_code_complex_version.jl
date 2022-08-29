@@ -119,19 +119,21 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
     T = dims.T            # Time periods for updating rule
 
     # Generate fake prices, transition matrix and sequence of states:
-    P =  [  0.217756  0.1969838;
-            0.274392  0.202034;
-            0.312304  0.2526249;
-            0.320314  0.303262;
-            0.350091  0.340
+    P =  [  0.317756  0.0969838;
+            0.474392  0.102034;
+            0.512304  0.1526249;
+            0.520314  0.203262;
+            0.550091  0.2540
             ]
+    
+    # P = abs.(randn(nStates, J))
 
     Π = generate_price_transition_matrix(nStates)
 
     m_states = obtain_price_states_over_time(T, Π) 
 
     # Generate logit shocks:
-    ϵ_jt = rand(Gumbel(0,1), J, T)
+    # ϵ_jt = rand(Gumbel(0,1), J, T)
 
     # Get nodes and weights from quadrature assuming only state is quality:
     q_nodes, q_weights = GaussHermite(quad_params.N_dim, quad_params.N_States)
@@ -189,7 +191,7 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
 
     function get_expected_value(ξ_prime_all, EV, α = α, P = P, q_weights = q_weights, Π = Π)
-                    
+
         J = size(ξ_prime_all,3)
         
         expected_value = zeros(size(P,1), J+1, J)  ## First two entries are states, last one is choice:
@@ -197,6 +199,8 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
         for jj = 1:J # Sum across all choices 
 
             for ss = 1:J+1
+
+                # print(jj,ss, '\n')
 
                 cheb = initializeChebyshevApproximator(cheb_params.N_dim, 
                                                         cheb_params.N_degree, 
@@ -211,6 +215,7 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
                 util = evaluateChebyshev(ξ_prime_all[:,ss,jj], cheb)' * q_weights .- α .* P[:,jj]
 
                 expected_value[:,ss,jj] = util .+ β .* Π *  log.(sum(exp.(EV[:,ss,:]), dims=2))
+
                 
             end
 
@@ -253,7 +258,7 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
             EV = copy(EV_next) # Important, copy, not input right away...
 
-            if its % 100 == 0.0
+            if its % 250 == 0.0
                 print("Period number: ",tt, "; Iteration: ",tt, "; V_diff = ", Vdiff,"\n")
             end
             
@@ -264,14 +269,14 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
         flow_utility = compute_random_utility(ξ_jt) .- α .* P[m_states[tt],:] #.+ ϵ_jt[:,tt]
 
         if tt == 1
-            s_state = 3
+            s_state = J+1
         else
             s_state = argmax(D_jt[:,tt-1])
         end
 
         V_all[:,tt] = flow_utility + β.* EV[m_states[tt], s_state,:]
         
-        V_placeholder = V_all[:,tt] .- maximum(V_all[:,tt])
+        V_placeholder = V_all[:,tt] .- minimum(V_all[:,tt])
 
         Pr_jt[1:J,tt] = exp.(V_placeholder) ./ (1 .+ sum(exp.(V_placeholder),dims=1))
 
@@ -307,12 +312,12 @@ dims = ModelDimensions(1000, # nObs
 
 mp   = ModelParameters(.9,      # ρ
                         .5,    # α
-                        1.5,     # γ
+                        .42,     # γ
                         .995,   # β
                         .5,     # σ_v
                         .5,     # σ_0
-                        3,      # μ_0
-                        [1.5 1.5] # ϑ
+                        1,      # μ_0
+                        [.5 .5 ] # ϑ
                         )
 
 
@@ -328,5 +333,33 @@ quad_params = QuadratureParameters( 1, # N_dim
 # Model 1: β = 0,998; 0,995; 0,99; 0;
 V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
 
+
+# 3. Analyse and simulate the model
+
+plot(V_all[1,:], label="Product 1")
+plot!(V_all[2,:], label="Product 2")
+savefig("Expected_value_function_over_time.pdf")
+
+plot(Pr_jt[1,:], label="Product 1")
+plot!(Pr_jt[2,:], label="Product 2")
+savefig("ccp_over_time.pdf")
+
+plot(Pr_jt[1,:], label="Product 1")
+plot!(Pr_jt[2,:], label="Product 2")
+savefig("ccp_over_time.pdf")
+
+plot(μ_prior[1,:], label="Product 1")
+plot!(μ_prior[2,:], label="Product 2")
+plot!([0; 18], [.5; .5], lw=2, lc=:black, label="True Mean Quality")
+savefig("average_quality_learning_parameter.pdf")
+
+# Part b:
+mean(D_jt, dims=2)
+
+pr_jt = cumsum(D_jt, dims=2)./ cumsum(ones(T-2))' 
+
+plot(pr_jt[1,:], label="Product 1")
+plot!(pr_jt[2,:], label="Product 2")
+savefig("probability_evolution_over_time.pdf")
 
 
