@@ -103,7 +103,7 @@ function obtain_price_states_over_time(T, Π, inital_state = 3)
 end
 
 
-function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter = 2000)
+function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter = 2000; no_learn = false)
 
     # Unpack Parameters:
     α = mp.α
@@ -119,13 +119,20 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
     T = dims.T            # Time periods for updating rule
 
     # Generate fake prices, transition matrix and sequence of states:
+    # P =  [  0.317756  0.0969838;
+    #         0.474392  0.102034;
+    #         0.512304  0.1526249;
+    #         0.520314  0.203262;
+    #         0.550091  0.2540
+    #         ]
+
     P =  [  0.317756  0.0969838;
-            0.474392  0.102034;
-            0.512304  0.1526249;
-            0.520314  0.203262;
-            0.550091  0.2540
+    0.317756  0.0969838;
+    0.317756  0.0969838;
+    0.317756  0.0969838;
+    0.317756  0.0969838;
             ]
-    
+            
     # P = abs.(randn(nStates, J))
 
     Π = generate_price_transition_matrix(nStates)
@@ -259,7 +266,7 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
             EV = copy(EV_next) # Important, copy, not input right away...
 
             if its % 250 == 0.0
-                print("Period number: ",tt, "; Iteration: ",tt, "; V_diff = ", Vdiff,"\n")
+                print("Period number: ",tt, "; Iteration: ",its, "; V_diff = ", Vdiff,"\n")
             end
             
             its += 1
@@ -292,6 +299,13 @@ function generate_model_simulation(mp, dims, cheb_params, quad_params, maxiter =
 
         # Update Prior Variance for next period: 
         σ_prior[:, tt+1] = update_quality_variance(σ_prior[:,1], σ_prior[:,tt], D_jt[1:J,1:tt]) 
+
+        if no_learn == true
+            μ_prior[2, tt+1] = μ_prior[2, tt]
+
+            # Update Prior Variance for next period: 
+            σ_prior[2, tt+1] = μ_prior[2, tt]             
+        end
 
         TT = tt
 
@@ -363,3 +377,174 @@ plot!(pr_jt[2,:], label="Product 2")
 savefig("probability_evolution_over_time.pdf")
 
 
+
+# Question D:
+
+
+dims = ModelDimensions(1000, # nObs
+                        2,   # J
+                        5,   # nStates
+                        10,  # nPolynomials
+                        30   # T
+                        )  
+
+mp   = ModelParameters(.9,      # ρ
+                        .8,    # α
+                        .48,     # γ
+                        .995,   # β
+                        .5,     # σ_v
+                        .5,     # σ_0
+                        1,      # μ_0
+                        [.5 .5 ] # ϑ
+                        )
+
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+
+# Question C: Probability evolution:
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+
+plot(pr_jt[1,:], label="Product 1")
+plot!(pr_jt[2,:], label="Product 2")
+savefig("probability_evolution_over_time.pdf")
+
+# Question D: Product switches (These eliminate the outside option, now we have to check how many switches there are):
+D_jt_no_oo = D_jt[1:2,D_jt[3,:].!=1]
+switches = zeros(1, size(D_jt_no_oo, 2))
+
+for ii = 1:size(D_jt_no_oo, 2)
+
+    if ii >1
+        switches[1,ii] = argmax(D_jt_no_oo[:,ii-1]) == argmax(D_jt_no_oo[:,ii])
+    end
+
+end
+
+switches_cumsum = cumsum(switches, dims=2)
+switches_all = zeros(1, size(D_jt, 2))
+switches_all[1,D_jt[3,:].!=1] .= switches_cumsum'
+
+for ii = 1:size(switches_all,2)
+    if ii >1 
+        if switches_all[ii]==0
+            switches_all[ii] = switches_all[ii-1]
+        end
+    end
+end
+
+inside_option_cumsum = cumsum(sum(D_jt[1:2,:], dims=1), dims=2)
+
+plot((switches_all./inside_option_cumsum)'[3:end,1])
+savefig("switches_ratio.pdf")
+
+
+# Subsection C: Changes in probability evolution conditional on different prior means:
+
+mp   = ModelParameters(.9,      # ρ
+                        .8,     # α
+                        .48,     # γ
+                        .995,   # β
+                        .5,     # σ_v
+                        .5,     # σ_0
+                        1,      # μ_0
+                        [.5 .5 ] # ϑ
+                        )
+
+
+mp.μ_0 = .5
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot(pr_jt[1,:], label="μ = 0.5; ϑ = 0.5")
+
+mp.μ_0 = 1
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label=label="μ = 1; ϑ = 0.5")
+
+mp.μ_0 = 2
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label=label="μ = 2; ϑ = 0.5")
+
+# Question C: Probability evolution:
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot(pr_jt[1,:], label=label="μ = 0.5; ϑ = 0.5")
+
+savefig("probability_evolution_conditional_on_beliefs.pdf")
+
+mp.μ_0 = .5
+
+# Subsection E: Compare the simulations for different discount factors, 0:998; 0:995; 0:99; 0; and 
+# for different levels of the risk aversion parameter : ... 
+
+# Discount Parameters:
+mp.β = .998
+
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot(pr_jt[1,:], label="β = 0.998")
+
+mp.β = .995
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="β = 0.995")
+
+mp.β = .90
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="β = 0.90")
+
+mp.β = .80
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="β = 0.80")
+
+mp.β = .50
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="β = 0.80")
+
+xlims!((5,28))
+ylims!((0,.75))
+
+savefig("different_discount_parameters.pdf")
+
+
+
+
+# Risk Aversion Parameters:
+
+mp.ρ = .9
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot(pr_jt[1,:], label="ρ = .9")
+
+mp.ρ = .8
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="ρ = .8")
+
+mp.ρ = .7
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="ρ = .7")
+
+mp.ρ = .5
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000)
+pr_jt = cumsum(D_jt, dims=2) ./ cumsum(ones(size(D_jt,2)))' 
+plot!(pr_jt[1,:], label="ρ = .5")
+
+savefig("different_risk_aversion_parameters.pdf")
+
+
+# Part A:
+mp.β = .998
+mp.ρ = .9
+mp.γ = .5
+
+V_all, D_jt, Pr_jt, μ_prior, σ_prior = generate_model_simulation(mp, dims, cheb_params, quad_params, 5000; no_learn = false)
+plot(V_all[1,:] .+  4, label="Product 1")
+plot!(V_all[2,:] .+ 4, label="Product 2")
+xlims!((5,28))
+ylims!((-2.5,2.5))
+
+savefig("value_function_simulation.pdf")
