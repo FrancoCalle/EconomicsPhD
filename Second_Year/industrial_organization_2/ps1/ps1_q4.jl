@@ -50,7 +50,9 @@ function blpShares(δ_jt, m, p, x, Γ_νi)
 
     M = maximum(m)
 
-    X = hcat(p, x)
+    X = hcat(p, x)  # Add constant here ...
+
+    X = hcat(ones(size(X,1)), X)
 
     s_blp_jt = zeros(J*M)
 
@@ -143,10 +145,18 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     α = parameters[1]
     β = parameters[2]
 
-    Γ = zeros(2,2);
+    Γ = zeros(3,3);
     Γ[1,1] = parameters[3];
     Γ[2,1] = parameters[4];
-    Γ[2,2] = parameters[5];
+    Γ[3,1] = parameters[5];
+
+    Γ[1,2] = parameters[6];
+    Γ[2,2] = parameters[7];
+    Γ[3,2] = parameters[8];
+    
+    Γ[1,3] = parameters[9];
+    Γ[2,3] = parameters[10];
+    Γ[3,3] = parameters[11];
 
     # Compute contraction and get mean utility...
     δ_jt_lag = rand(M*J);
@@ -168,19 +178,26 @@ end
 
 # Execute code:...
 dataset = DataFrame(CSV.File("ps1_ex4.csv"));
+# dataset = dataset[dataset.choice .==3,:]
+# dataset.choice .= 1
+
 s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
 
 # Generate Random Mean Utilities ...
 nDrawsVi = 20
-param_init = abs.(rand(5))
+param_init = abs.(rand(2+9))
 param_init[1] = -param_init[1]
-vi = [rand(MultivariateNormal([0,0], Matrix(I,2,2)), nDrawsVi) for ii = 1:M];
+param_init[2] = -param_init[2]
+vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
 
 # gmm_objective(param_init)
-result = optimize(gmm_objective, param_init, NelderMead(), Optim.Options(outer_iterations = 1500,
-                    iterations=10000,
-                    show_trace=true,
-                    show_every=100))
+result = optimize(gmm_objective, param_init, NelderMead(), 
+                    Optim.Options(outer_iterations = 1500,
+                                    iterations=10000,
+                                    show_trace=true,
+                                    show_every=100
+                                    )
+                                    )
 
 params_hat = Optim.minimizer(result)
 
@@ -257,15 +274,21 @@ end
 
 α = -params_candidate1[1]
 
-Γ = zeros(2,2);
-Γ[1,1] = params_candidate1[3];
-Γ[2,1] = params_candidate1[4];
-Γ[2,2] = params_candidate1[5];
+Γ = ones(3,3);
+Γ[1,1] = params_candidate1[2];
+Γ[2,1] = params_candidate1[3];
+Γ[3,1] = params_candidate1[4];
+Γ[1,2] = params_candidate1[5];
+Γ[2,2] = params_candidate1[6];
+Γ[3,2] = params_candidate1[7];
+Γ[1,3] = params_candidate1[8];
+Γ[2,3] = params_candidate1[9];
+Γ[3,3] = params_candidate1[10];
 Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
 
 δ_jt = inner_loop(Γ, rand(M*J))
 
-pr_jtn= blpShares_nu(δ_jt, m, p, x, Γ_νi)
+pr_jtn = blpShares_nu(δ_jt, m, p, x, Γ_νi)
 
 η_jkm = get_elasticities(α, p, pr_jtn, s_jt)
 
