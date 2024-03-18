@@ -150,13 +150,15 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     Γ[2,1] = parameters[4];
     Γ[3,1] = parameters[5];
 
-    Γ[1,2] = parameters[6];
-    Γ[2,2] = parameters[7];
-    Γ[3,2] = parameters[8];
+    Γ[1,2] = Γ[2,1];
+    Γ[2,2] = parameters[6];
+    Γ[3,2] = parameters[7];
     
-    Γ[1,3] = parameters[9];
-    Γ[2,3] = parameters[10];
-    Γ[3,3] = parameters[11];
+    Γ[1,3] = Γ[3,1];
+    Γ[2,3] = Γ[3,2];
+    Γ[3,3] = 0;
+
+    α0 = parameters[8]
 
     # Compute contraction and get mean utility...
     δ_jt_lag = rand(M*J);
@@ -166,7 +168,7 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     Z = Array(z)
     Ω = inv(Z'*Z);
     
-    ξ = δ_jt - α * p - β * x
+    ξ = δ_jt .- α0 - α * p - β * x
 
     obj = ξ'*Z*Ω*Z'ξ;
 
@@ -185,7 +187,7 @@ s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
 
 # Generate Random Mean Utilities ...
 nDrawsVi = 20
-param_init = abs.(rand(2+9))
+param_init = abs.(rand(3+9))
 param_init[1] = -param_init[1]
 param_init[2] = -param_init[2]
 vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
