@@ -141,7 +141,7 @@ function squarem_inner_loop(Γ, δ_jt_lag; # Changing
 
     iter = 0
 
-    while tol > 10^-15
+    while tol > 10^-18
 
         # Get the residuals 
         δ_jt = fixed_point_function(δ_jt_lag, Γ_νi)
@@ -252,57 +252,6 @@ end
 
 
 
-# Execute code:...
-dataset = DataFrame(CSV.File("ps1_ex4.csv"));
-# dataset = dataset[dataset.choice .==3,:]
-# dataset.choice .= 1
-
-s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
-
-# Generate Random Mean Utilities ...
-nDrawsVi = 20
-param_init = abs.(rand(3+5))
-param_init[1] = -param_init[1]
-param_init[2] = -param_init[2]
-
-
-param_init = [
-    -0.6784912879516745
-    0.8753939489011057
-   -0.012562608202660065
-    0.5083957772795471
-    2.9825967782101053
-    1.0148900826438592
-    0.22315678354919313
-   -2.2060376526126966
-]
-
-vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
-
-# gmm_objective(param_init)
-result = optimize(gmm_objective, param_init, NelderMead(), 
-                    Optim.Options(outer_iterations = 1500,
-                                    iterations=10000,
-                                    show_trace=true,
-                                    show_every=100,
-                                    g_tol = 1e-15,
-                                    )
-                                    )
-
-params_hat = Optim.minimizer(result)
-
-# Potential Candidate:
-params_candidate1 = [
-    -1
-    1.5
-    -2.0019003342751214
-    -0.04381409409480813
-    0.14376694750798633
-    0.14376694750798633
-    0.14376694750798633
-    0.14376694750798633
-]
-
 #Compute Ealsticities:
 
 function blpShares_nu(δ_jt, m, p, x, Γ_νi)
@@ -363,6 +312,55 @@ function get_elasticities(α, p, pr_jtn, s_jt; nDrawsVi=nDrawsVi)
 end
 
 
+
+
+#-----------------------------------------------
+
+# Execute code:...
+dataset = DataFrame(CSV.File("ps1_ex4.csv"));
+# dataset = dataset[dataset.choice .==3,:]
+# dataset.choice .= 1
+
+s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
+
+# Generate Random Mean Utilities ...
+nDrawsVi = 20
+
+param_init = abs.(rand(3+5))
+
+param_init = [
+    -0.7073319939571994
+    1.5734331037682376
+   -0.016876477245856725
+   -1.0863189542816258
+    4.208297519452838
+    1.1911652520386409
+    0.5098444990782066
+   -2.915511747442236
+]
+
+vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
+
+# gmm_objective(param_init)
+result = optimize(gmm_objective, param_init, NelderMead(), 
+                    Optim.Options(outer_iterations = 1500,
+                                    iterations=10000,
+                                    show_trace=true,
+                                    show_every=100,
+                                    g_tol = 1e-20,
+                                    )
+                                    )
+
+params_hat = Optim.minimizer(result)
+
+# Potential Candidate:
+params_candidate1 = param_init
+
+
+
+
+
+#-----------------------------------------------
 # Obtain elasticities:
 
 α = params_candidate1[1]
@@ -410,7 +408,8 @@ print("Shares", mean(reshape(s_jt,J,M), dims=2))
 
 
 
-#-----------------
+#-----------------------------------------------
+
 using Pkg
 Pkg.add("Optim")
 using Optim
