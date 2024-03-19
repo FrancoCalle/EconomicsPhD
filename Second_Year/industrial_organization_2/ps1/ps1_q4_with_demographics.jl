@@ -68,30 +68,28 @@ end
 
 
 function blpShares_with_demographics(δ_jt, # Mean Utilities
-                                        m, # Markets
-                                        p, # Prices
-                                        x, # Quality 
                                         Π, # Parameters
-                                        Γ_νi # Unobserved Heterogeneity
+                                        Γ_νi; # Unobserved Heterogeneity
+                                        m = m, # Markets
+                                        X = X, # Prices and quality
+                                        D = D # Demographics 
                                         )
 
     # nDrawsVi = 50  
 
     M = maximum(m)
 
-    X = hcat(p, x)  # Add constant here ...
-
-    X = hcat(ones(size(X,1)), X)
-
     s_blp_jt = zeros(J*M)
 
     @threads for ii = 1:M  # obtain shares conditional on each market
         
-        u_jn = δ_jt[m .== ii] .+ X[m .== ii,:] * Π * D .+ X[m .== ii,:]*Γ_νi[ii]
+        μ_ij = sum(X[m .== ii,:] * Π * D[m .== ii,:]', dims=2) .+ X[m .== ii,:]*Γ_νi[ii]
+
+        u_jn = δ_jt[m .== ii] .+ μ_ij
     
         pr_jn = exp.(u_jn)./(1 .+ sum(exp.(u_jn), dims=1))
         
-        s_blp_jt[m .== ii]= mean(pr_jn, dims=2)
+        s_blp_jt[m .== ii] = mean(pr_jn, dims=2)
     
     end
 
@@ -100,11 +98,21 @@ function blpShares_with_demographics(δ_jt, # Mean Utilities
 end
 
 
-function fixed_point_function(δ_jt_lag, Γ_νi ; 
+function fixed_point_function(δ_jt_lag, 
+                                Γ_νi,
+                                Π; 
                                 s_jt=s_jt, 
-                                X)
+                                X = X,
+                                D = D)
 
-    δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, X, Γ_νi))
+    δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares_with_demographics(δ_jt_lag, 
+                                                                    Π, 
+                                                                    Γ_νi;
+                                                                    m = m, 
+                                                                    X = X,
+                                                                    D = D
+                                                                    )
+                                                                    )
 
     return δ_jt
 
@@ -112,10 +120,12 @@ end
 
 
 function inner_loop(Γ, 
+                    Π,
                     δ_jt_lag; # Changing
                     vi=vi, 
                     s_jt=s_jt, 
-                    X,
+                    X=X,
+                    D=D,
                     M=M)
 
     tol = 1 # tolerance
@@ -126,8 +136,12 @@ function inner_loop(Γ,
 
     while tol > 10^-14
 
-        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi; s_jt, X)
-        # δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
+        δ_jt = fixed_point_function(δ_jt_lag, 
+                                        Γ_νi, 
+                                        Π; 
+                                        s_jt, 
+                                        X, 
+                                        D)  # δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
 
         tol = sum((δ_jt - δ_jt_lag).^2)
 
@@ -154,24 +168,29 @@ function compute_alpha(num, denom)
 end
 
 
-function squarem_inner_loop(Γ, δ_jt_lag; # Changing
-                    vi=vi, 
-                    s_jt=s_jt, 
-                    X = X,
-                    M=M)
+function squarem_inner_loop(Γ, 
+                            Π, 
+                            δ_jt_lag; # Changing
+                            vi=vi, 
+                            s_jt=s_jt, 
+                            X = X,
+                            D = D,
+                            M=M)
 
     tol = 1 # tolerance
 
+    # Compute Unobserved Heterogeneity
     Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
+
 
     iter = 0
 
-    while tol > 10^-17
+    while tol > 10^-14
 
         # Get the residuals 
-        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi; s_jt, X)
+        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi, Π);
         q1 = δ_jt .- δ_jt_lag
-        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi; s_jt, X)
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi, Π);
         q2 = δ_jt_prime .- δ_jt
 
         # Form quadratic terms
@@ -183,12 +202,15 @@ function squarem_inner_loop(Γ, δ_jt_lag; # Changing
         δ_jt = δ_jt_lag + 2 * alpha * q1 + alpha.^2 * (q2-q1);
 
         # Fixed point iteration beyond the quadratic step
-        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi; s_jt, X);
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi, Π);
     
         tol = sum((δ_jt_prime - δ_jt).^2)
 
         iter += 1
-        # print("Euclidean Distance: ", tol, "\n", "Iteration: ", iter, "\n")
+
+        if iter % 30 == 0            
+            print("Euclidean Distance: ", tol, "\n", "Iteration: ", iter, "\n")
+        end
 
         δ_jt_lag = δ_jt_prime
 
@@ -217,7 +239,7 @@ function get_marginal_cost(p, η_jkm)
 end
 
 
-function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
+function gmm_objective(parameters; vi=vi, p = p, x = x, z = z, D = D)
 
     # Create X matrix Add constant here ...
     X = hcat(p, x)  
@@ -227,6 +249,8 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     α = parameters[1]
     β = parameters[2]
 
+    
+    # Unobserved Heterogeneity:
     Γ = zeros(3,3);
     Γ[1,1] = parameters[3];
     Γ[2,1] = parameters[4];
@@ -240,12 +264,17 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     Γ[2,3] = Γ[3,2];
     Γ[3,3] = 0;
 
-    α0 = parameters[8]
+    # Observed Heterogeneity:
+    dim_Π_1 = size(X,2)
+    dim_Π_2 = size(D,2)
+    Π = zeros(dim_Π_1,dim_Π_2);
+    Π = reshape(parameters[8:8+(dim_Π_1*dim_Π_2 - 1)], dim_Π_1, dim_Π_2);
+    α0 = parameters[end]
 
-    # Compute contraction and get mean utility...
-    δ_jt_lag = rand(M*J);
-    # δ_jt = inner_loop(Γ, δ_jt_lag; vi=vi, s_jt=s_jt, X = X)
-    δ_jt = squarem_inner_loop(Γ, δ_jt_lag; vi=vi, s_jt=s_jt, X = X)
+    
+    # Compute contraction and get mean utility (SQUAREM method)...
+    δ_jt_lag = rand(M*J); # Random Initial Guess
+    δ_jt = squarem_inner_loop(Γ, Π, δ_jt_lag; vi=vi, s_jt=s_jt, X = X, D=D, M) # δ_jt = inner_loop(Γ, δ_jt_lag; vi=vi, s_jt=s_jt, X = X)
     # Compute GMM objective Function
     Z = Array(z)
     Ω = inv(Z'*Z);
@@ -257,7 +286,6 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     return obj
 
 end
-
 
 
 #Compute Ealsticities:
@@ -332,25 +360,22 @@ nDrawsVi = 20
 vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
 
 s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
-K = 5
+K = 3
 D = rand(size(z,1), K)
 
 # Generate Random Mean Utilities ...
 
 
-param_init = abs.(rand(3+5))
+param_init = abs.(
+                rand(
+                    3 + # α, β, and constant
+                    5 + # Γ
+                    size(X,2) * size(D,2) # Π
+                    )
+                    )
 
-param_init = [
-    -1
-    1.5
-   -2.06447019028676
-    0.9916525538325098
-    0.5416127398793276
-    1.102057732887503
-   -0.4288897218541497
-   -2.441356865814114
-]
-
+param_init[1] = -1
+param_init[2] = 1.5
 
 # Run the optimization process:
 result = optimize(gmm_objective, param_init, NelderMead(), 
@@ -391,9 +416,9 @@ params_candidate1 = param_init
 
 Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
 
-δ_jt = inner_loop(Γ, rand(M*J));
+δ_jt = inner_loop(Γ, Π, rand(M*J));
 
-δ_jt_squarem = squarem_inner_loop(Γ, rand(M*J));
+δ_jt_squarem = squarem_inner_loop(Γ, Π, rand(M*J));
 
 sum(abs.(δ_jt.- δ_jt_squarem))
 
