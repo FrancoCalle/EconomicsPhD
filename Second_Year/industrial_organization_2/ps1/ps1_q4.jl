@@ -43,15 +43,11 @@ function unpackVariables(dataset)
 end
 
 
-function blpShares(δ_jt, m, p, x, Γ_νi)
+function blpShares(δ_jt, m, X, Γ_νi)
 
     # nDrawsVi = 50  
 
     M = maximum(m)
-
-    X = hcat(p, x)  # Add constant here ...
-
-    X = hcat(ones(size(X,1)), X)
 
     s_blp_jt = zeros(J*M)
 
@@ -71,23 +67,55 @@ end
 
 
 
+function blpShares_with_demographics(δ_jt, # Mean Utilities
+                                        m, # Markets
+                                        p, # Prices
+                                        x, # Quality 
+                                        Π, # Parameters
+                                        Γ_νi # Unobserved Heterogeneity
+                                        )
+
+    # nDrawsVi = 50  
+
+    M = maximum(m)
+
+    X = hcat(p, x)  # Add constant here ...
+
+    X = hcat(ones(size(X,1)), X)
+
+    s_blp_jt = zeros(J*M)
+
+    @threads for ii = 1:M  # obtain shares conditional on each market
+        
+        u_jn = δ_jt[m .== ii] .+ X[m .== ii,:] * Π * D .+ X[m .== ii,:]*Γ_νi[ii]
+    
+        pr_jn = exp.(u_jn)./(1 .+ sum(exp.(u_jn), dims=1))
+        
+        s_blp_jt[m .== ii]= mean(pr_jn, dims=2)
+    
+    end
+
+   
+    return s_blp_jt
+end
+
+
 function fixed_point_function(δ_jt_lag, Γ_νi ; 
                                 s_jt=s_jt, 
-                                p=p, 
-                                x=x)
+                                X)
 
-    δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
+    δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, X, Γ_νi))
 
     return δ_jt
 
 end
 
 
-function inner_loop(Γ, δ_jt_lag; # Changing
+function inner_loop(Γ, 
+                    δ_jt_lag; # Changing
                     vi=vi, 
                     s_jt=s_jt, 
-                    p=p, 
-                    x=x,
+                    X,
                     M=M)
 
     tol = 1 # tolerance
@@ -98,7 +126,7 @@ function inner_loop(Γ, δ_jt_lag; # Changing
 
     while tol > 10^-14
 
-        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi)
+        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi; s_jt, X)
         # δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
 
         tol = sum((δ_jt - δ_jt_lag).^2)
@@ -121,8 +149,6 @@ function compute_alpha(num, denom)
 
     alpha = -num/denom
 
-    # alpha = max(stepmin,min(stepmax,alpha));
-
     return alpha
 
 end
@@ -131,8 +157,7 @@ end
 function squarem_inner_loop(Γ, δ_jt_lag; # Changing
                     vi=vi, 
                     s_jt=s_jt, 
-                    p=p, 
-                    x=x,
+                    X = X,
                     M=M)
 
     tol = 1 # tolerance
@@ -141,12 +166,12 @@ function squarem_inner_loop(Γ, δ_jt_lag; # Changing
 
     iter = 0
 
-    while tol > 10^-18
+    while tol > 10^-15
 
         # Get the residuals 
-        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi)
+        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi; s_jt, X)
         q1 = δ_jt .- δ_jt_lag
-        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi)
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi; s_jt, X)
         q2 = δ_jt_prime .- δ_jt
 
         # Form quadratic terms
@@ -158,7 +183,7 @@ function squarem_inner_loop(Γ, δ_jt_lag; # Changing
         δ_jt = δ_jt_lag + 2 * alpha * q1 + alpha.^2 * (q2-q1);
 
         # Fixed point iteration beyond the quadratic step
-        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi);
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi; s_jt, X);
     
         tol = sum((δ_jt_prime - δ_jt).^2)
 
@@ -173,28 +198,6 @@ function squarem_inner_loop(Γ, δ_jt_lag; # Changing
 
     return δ_jt
 
-end
-
-function get_elasticities(α, p, s_jt, vi)
-
-    S = reshape(s_jt, J, M)
-    P = reshape(p, J, M)
-
-    η_jkm = zeros(J,J,M)
-
-    for mm = 1:M
-        for jj = 1:J
-            for kk = 1:J
-                if jj == kk
-                    η_jkm[jj,kk,mm] = -α .* P[kk,mm] .* (1 - S[kk,mm]) #Check whether this is the right approach to ge elasticiities
-                else
-                    η_jkm[jj,kk,mm] = α .* P[kk,mm] .* S[kk,mm]
-                end
-            end
-        end
-    end
-
-    return η_jkm
 end
 
 
@@ -216,6 +219,11 @@ end
 
 function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
 
+    # Create X matrix Add constant here ...
+    X = hcat(p, x)  
+    X = hcat(ones(size(X,1)), X) # Add constant here 
+
+    # Unpack parameters...
     α = parameters[1]
     β = parameters[2]
 
@@ -237,7 +245,7 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
     # Compute contraction and get mean utility...
     δ_jt_lag = rand(M*J);
     # δ_jt = inner_loop(Γ, δ_jt_lag)
-    δ_jt = squarem_inner_loop(Γ, δ_jt_lag)
+    δ_jt = squarem_inner_loop(Γ, δ_jt_lag; vi=vi, s_jt=s_jt, X = X)
     # Compute GMM objective Function
     Z = Array(z)
     Ω = inv(Z'*Z);
@@ -322,6 +330,8 @@ dataset = DataFrame(CSV.File("ps1_ex4.csv"));
 # dataset.choice .= 1
 
 s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
+K = 5
+D = rand(size(z,1), K)
 
 # Generate Random Mean Utilities ...
 nDrawsVi = 20
@@ -341,13 +351,13 @@ param_init = [
 
 vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
 
-# gmm_objective(param_init)
+# Run the optimization process:
 result = optimize(gmm_objective, param_init, NelderMead(), 
                     Optim.Options(outer_iterations = 1500,
-                                    iterations=10000,
+                                    iterations=2500,
                                     show_trace=true,
                                     show_every=100,
-                                    g_tol = 1e-20,
+                                    g_tol = 1e-18,
                                     )
                                     )
 
