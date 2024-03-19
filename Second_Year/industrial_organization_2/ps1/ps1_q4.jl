@@ -1,14 +1,14 @@
 using Pkg
 
+Pkg.update()
 #Install ...
-# Pkg.add("Distributions")
-# Pkg.add("StatsBase")
-# Pkg.add("Plots")
-# Pkg.add("StatFiles")
-# Pkg.add("Tables")
-# Pkg.add("CSV")
-# Pkg.add("Optim")
+Pkg.add("Distributions")
+Pkg.add("StatsBase")
+Pkg.add("Tables")
+Pkg.add("CSV")
+Pkg.add("Optim")
 Pkg.instantiate()
+
 
 #Load packages ...
 
@@ -16,18 +16,17 @@ using Distributions
 using LinearAlgebra
 using DataFrames
 using StatFiles
-using Chain
+# using Chain
 using Tables
 using CSV
 using Optim
 using Random
-using Plots
+# using Plots
 using Base.Threads
-using PyCall
-# pyblp = pyimport("pyblp")
+# using PyCall
+
 
 # Excercise 2
-
 function unpackVariables(dataset)
     
     s_jt = dataset.shares
@@ -70,6 +69,20 @@ function blpShares(δ_jt, m, p, x, Γ_νi)
     return s_blp_jt
 end
 
+
+
+function fixed_point_function(δ_jt_lag, Γ_νi ; 
+                                s_jt=s_jt, 
+                                p=p, 
+                                x=x)
+
+    δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
+
+    return δ_jt
+
+end
+
+
 function inner_loop(Γ, δ_jt_lag; # Changing
                     vi=vi, 
                     s_jt=s_jt, 
@@ -80,14 +93,18 @@ function inner_loop(Γ, δ_jt_lag; # Changing
     tol = 1 # tolerance
 
     Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
+    
+    iter = 0
 
     while tol > 10^-14
 
-        δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
+        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi)
+        # δ_jt = δ_jt_lag + log.(s_jt) - log.(blpShares(δ_jt_lag, m, p, x, Γ_νi))
 
         tol = sum((δ_jt - δ_jt_lag).^2)
 
-        # print("Euclidean Distance: ", tol, "\n")
+        iter += 1
+        # print("Euclidean Distance: ", tol, "\n", "Iteration: ", iter, "\n")
 
         δ_jt_lag = δ_jt
 
@@ -100,6 +117,63 @@ function inner_loop(Γ, δ_jt_lag; # Changing
 end
 
 
+function compute_alpha(num, denom)
+
+    alpha = -num/denom
+
+    # alpha = max(stepmin,min(stepmax,alpha));
+
+    return alpha
+
+end
+
+
+function squarem_inner_loop(Γ, δ_jt_lag; # Changing
+                    vi=vi, 
+                    s_jt=s_jt, 
+                    p=p, 
+                    x=x,
+                    M=M)
+
+    tol = 1 # tolerance
+
+    Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
+
+    iter = 0
+
+    while tol > 10^-15
+
+        # Get the residuals 
+        δ_jt = fixed_point_function(δ_jt_lag, Γ_νi)
+        q1 = δ_jt .- δ_jt_lag
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi)
+        q2 = δ_jt_prime .- δ_jt
+
+        # Form quadratic terms
+        α_denom = (q2-q1)'*(q2-q1);
+        α_num = q1'*(q2-q1);
+
+        # Get the step-size
+        alpha = compute_alpha(α_num,α_denom);
+        δ_jt = δ_jt_lag + 2 * alpha * q1 + alpha.^2 * (q2-q1);
+
+        # Fixed point iteration beyond the quadratic step
+        δ_jt_prime = fixed_point_function(δ_jt, Γ_νi);
+    
+        tol = sum((δ_jt_prime - δ_jt).^2)
+
+        iter += 1
+        # print("Euclidean Distance: ", tol, "\n", "Iteration: ", iter, "\n")
+
+        δ_jt_lag = δ_jt_prime
+
+    end
+
+    δ_jt = δ_jt_lag
+
+    return δ_jt
+
+end
 
 function get_elasticities(α, p, s_jt, vi)
 
@@ -162,8 +236,8 @@ function gmm_objective(parameters; vi=vi, p = p, x = x, z = z)
 
     # Compute contraction and get mean utility...
     δ_jt_lag = rand(M*J);
-    δ_jt = inner_loop(Γ, δ_jt_lag)
-
+    # δ_jt = inner_loop(Γ, δ_jt_lag)
+    δ_jt = squarem_inner_loop(Γ, δ_jt_lag)
     # Compute GMM objective Function
     Z = Array(z)
     Ω = inv(Z'*Z);
@@ -187,9 +261,22 @@ s_jt , p, x , z, m, j, M, J = unpackVariables(dataset);
 
 # Generate Random Mean Utilities ...
 nDrawsVi = 20
-param_init = abs.(rand(3+9))
+param_init = abs.(rand(3+5))
 param_init[1] = -param_init[1]
 param_init[2] = -param_init[2]
+
+
+param_init = [
+    -0.6784912879516745
+    0.8753939489011057
+   -0.012562608202660065
+    0.5083957772795471
+    2.9825967782101053
+    1.0148900826438592
+    0.22315678354919313
+   -2.2060376526126966
+]
+
 vi = [rand(MultivariateNormal([0,0,0], Matrix(I,3,3)), nDrawsVi) for ii = 1:M];
 
 # gmm_objective(param_init)
@@ -197,7 +284,8 @@ result = optimize(gmm_objective, param_init, NelderMead(),
                     Optim.Options(outer_iterations = 1500,
                                     iterations=10000,
                                     show_trace=true,
-                                    show_every=100
+                                    show_every=100,
+                                    g_tol = 1e-15,
                                     )
                                     )
 
@@ -205,10 +293,13 @@ params_hat = Optim.minimizer(result)
 
 # Potential Candidate:
 params_candidate1 = [
-    -0.18472568371716075
-    2.1385463127358983
+    -1
+    1.5
     -2.0019003342751214
     -0.04381409409480813
+    0.14376694750798633
+    0.14376694750798633
+    0.14376694750798633
     0.14376694750798633
 ]
 
@@ -274,21 +365,28 @@ end
 
 # Obtain elasticities:
 
-α = -params_candidate1[1]
+α = params_candidate1[1]
 
 Γ = ones(3,3);
-Γ[1,1] = params_candidate1[2];
-Γ[2,1] = params_candidate1[3];
-Γ[3,1] = params_candidate1[4];
-Γ[1,2] = params_candidate1[5];
+Γ[1,1] = params_candidate1[3];
+Γ[2,1] = params_candidate1[4];
+Γ[3,1] = params_candidate1[5];
+
+Γ[1,2] = Γ[2,1];
 Γ[2,2] = params_candidate1[6];
 Γ[3,2] = params_candidate1[7];
-Γ[1,3] = params_candidate1[8];
-Γ[2,3] = params_candidate1[9];
-Γ[3,3] = params_candidate1[10];
+
+Γ[1,3] = Γ[3,1];
+Γ[2,3] = Γ[3,2];
+Γ[3,3] = 0;
+
 Γ_νi = [Γ*vi[ii] for ii = 1:M]  # Weight the nodes...
 
-δ_jt = inner_loop(Γ, rand(M*J))
+δ_jt = inner_loop(Γ, rand(M*J));
+
+δ_jt_squarem = squarem_inner_loop(Γ, rand(M*J));
+
+sum(abs.(δ_jt.- δ_jt_squarem))
 
 pr_jtn = blpShares_nu(δ_jt, m, p, x, Γ_νi)
 
@@ -311,3 +409,17 @@ print("Quality:", mean(reshape(x,J,M), dims=2))
 print("Shares", mean(reshape(s_jt,J,M), dims=2))
 
 
+
+#-----------------
+using Pkg
+Pkg.add("Optim")
+using Optim
+
+# Define a simple objective function, e.g., Rosenbrock's banana function
+f(x) = (1.0 - x[1])^2 + 100.0 * (x[2] - x[1]^2)^2
+
+# Run the optimizer
+result = optimize(f, [0.0, 0.0], NelderMead(), Optim.Options(show_trace=true))
+
+# Print the result
+println(result)

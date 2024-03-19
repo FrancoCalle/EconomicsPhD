@@ -20,7 +20,6 @@ nevo_dataset.columns
 
 
 
-
 product_data = pd.read_csv('ps1_ex4.csv').rename(columns={'market': 'market_ids',
                                                           'p': 'prices',
                                                           'z1': 'demand_instruments0',
@@ -31,7 +30,7 @@ product_data = pd.read_csv('ps1_ex4.csv').rename(columns={'market': 'market_ids'
                                                           'z6': 'demand_instruments5',
                                                           'choice':'product_ids'})
 
-X1_formulation = pyblp.Formulation('1 + prices + x' )
+X1_formulation = pyblp.Formulation('1 + prices + x', absorb='C(market_ids)')
 X2_formulation = pyblp.Formulation('1 + prices + x')
 product_formulations = (X1_formulation, X2_formulation)
 product_formulations
